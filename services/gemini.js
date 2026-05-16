@@ -32,11 +32,11 @@ Si l'utilisateur demande un prix ou un devis, l'intent est "quote".
 
 async function getAIResponse(userMessage, history = []) {
     try {
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
 
         const chat = model.startChat({
             history: history.map(h => ({
-                role: h.role === 'bot' ? 'model' : 'user',
+                role: h.sender === 'ai' ? 'model' : 'user',
                 parts: [{ text: h.content }],
             })),
             generationConfig: {
