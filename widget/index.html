@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Assuria Chat Widget</title>
+    <style>
+        :root {
+            --primary: #1d9878;
+            --bg: #1c2c46;
+            --text: #ffffff;
+        }
+        #assuria-widget-container {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 10000;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        #assuria-toggle-btn {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: var(--primary);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.3s ease;
+        }
+        #assuria-toggle-btn:hover {
+            transform: scale(1.1);
+        }
+        #assuria-chat-window {
+            position: absolute;
+            bottom: 80px;
+            right: 0;
+            width: 350px;
+            height: 500px;
+            background: var(--bg);
+            border-radius: 16px;
+            display: none;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.4);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .chat-header {
+            padding: 15px;
+            background: var(--primary);
+            color: white;
+            font-weight: bold;
+            display: flex;
+            justify-content: space-between;
+        }
+        .chat-messages {
+            flex: 1;
+            padding: 15px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .message {
+            max-width: 80%;
+            padding: 10px 14px;
+            border-radius: 14px;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+        .message.user {
+            background: var(--primary);
+            align-self: flex-end;
+            color: white;
+            border-bottom-right-radius: 2px;
+        }
+        .message.bot {
+            background: rgba(255,255,255,0.1);
+            align-self: flex-start;
+            color: white;
+            border-bottom-left-radius: 2px;
+        }
+        .chat-input {
+            padding: 15px;
+            background: rgba(0,0,0,0.2);
+            display: flex;
+            gap: 10px;
+        }
+        .chat-input input {
+            flex: 1;
+            background: rgba(255,255,255,0.1);
+            border: none;
+            padding: 10px;
+            border-radius: 8px;
+            color: white;
+            outline: none;
+        }
+        .chat-input button {
+            background: var(--primary);
+            border: none;
+            color: white;
+            padding: 8px 15px;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div id="assuria-widget-container">
+        <div id="assuria-chat-window">
+            <div class="chat-header">
+                <span>Assuria Assistant</span>
+                <span style="cursor:pointer" onclick="toggleChat()">×</span>
+            </div>
+            <div class="chat-messages" id="chat-messages">
+                <div class="message bot">Bonjour ! Comment puis-je vous aider aujourd'hui ?</div>
+            </div>
+            <div class="chat-input">
+                <input type="text" id="chat-input-field" placeholder="Écrivez votre message...">
+                <button onclick="sendMessage()">Envoyer</button>
+            </div>
+        </div>
+        <div id="assuria-toggle-btn" onclick="toggleChat()">
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:3000/api/widget'; // Change to Railway URL in production
+        const sessionId = Math.random().toString(36).substring(7);
+
+        function toggleChat() {
+            const window = document.getElementById('assuria-chat-window');
+            window.style.display = window.style.display === 'flex' ? 'none' : 'flex';
+        }
+
+        async function sendMessage() {
+            const input = document.getElementById('chat-input-field');
+            const message = input.value.trim();
+            if (!message) return;
+
+            addMessage(message, 'user');
+            input.value = '';
+
+            try {
+                const res = await fetch(`${API_URL}/message`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sessionId, message })
+                });
+                const data = await res.json();
+                addMessage(data.response, 'bot');
+            } catch (e) {
+                addMessage("Erreur de connexion.", 'bot');
+            }
+        }
+
+        function addMessage(text, sender) {
+            const container = document.getElementById('chat-messages');
+            const div = document.createElement('div');
+            div.className = `message ${sender}`;
+            div.innerText = text;
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        document.getElementById('chat-input-field').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendMessage();
+        });
+    </script>
+</body>
+</html>
