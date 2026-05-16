@@ -26,6 +26,7 @@ router.get('/', (req, res) => {
 
 // Incoming messages (POST)
 router.post('/', async (req, res) => {
+    console.log('Message reçu:', JSON.stringify(req.body, null, 2));
     try {
         const body = req.body;
 
@@ -37,7 +38,7 @@ router.post('/', async (req, res) => {
 
                 if (!msgBody) return res.sendStatus(200);
 
-                console.log(`Message from ${from}: ${msgBody}`);
+                console.log(`Traitement du message de ${from}: ${msgBody}`);
 
                 // 1. Get or Create Conversation
                 let { data: conv, error: convError } = await supabase
@@ -113,7 +114,10 @@ router.post('/', async (req, res) => {
             res.sendStatus(404);
         }
     } catch (error) {
-        console.error("Error processing message:", error.response ? error.response.data : error.message);
+        console.error('Erreur:', error.message, error.stack);
+        if (error.response) {
+            console.error('Détails de la réponse WhatsApp:', JSON.stringify(error.response.data, null, 2));
+        }
         res.sendStatus(500);
     }
 });
