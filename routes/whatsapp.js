@@ -8,6 +8,20 @@ const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN;
 const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN;
 const PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID;
 
+// Route de test
+router.get('/test', (req, res) => {
+  res.json({ status: 'webhook actif', timestamp: new Date() });
+});
+
+// Bypass pour debug (sera exécuté avant le reste)
+router.post('/', (req, res, next) => {
+  console.log('=== MESSAGE RECU ===');
+  console.log(JSON.stringify(req.body, null, 2));
+  // Si on veut que la logique normale s'exécute aussi, on pourrait appeler next(). 
+  // Mais l'utilisateur a demandé res.sendStatus(200) directement.
+  res.sendStatus(200);
+});
+
 // Webhook verification (GET)
 router.get('/', (req, res) => {
     const mode = req.query['hub.mode'];
