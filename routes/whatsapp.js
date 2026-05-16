@@ -13,15 +13,6 @@ router.get('/test', (req, res) => {
   res.json({ status: 'webhook actif', timestamp: new Date() });
 });
 
-// Bypass pour debug (sera exécuté avant le reste)
-router.post('/', (req, res, next) => {
-  console.log('=== MESSAGE RECU ===');
-  console.log(JSON.stringify(req.body, null, 2));
-  // Si on veut que la logique normale s'exécute aussi, on pourrait appeler next(). 
-  // Mais l'utilisateur a demandé res.sendStatus(200) directement.
-  res.sendStatus(200);
-});
-
 // Webhook verification (GET)
 router.get('/', (req, res) => {
     const mode = req.query['hub.mode'];
@@ -40,7 +31,9 @@ router.get('/', (req, res) => {
 
 // Incoming messages (POST)
 router.post('/', async (req, res) => {
-    console.log('Message reçu:', JSON.stringify(req.body, null, 2));
+    console.log('=== NOUVEAU MESSAGE WHATSAPP ===');
+    console.log('Body:', JSON.stringify(req.body, null, 2));
+
     try {
         const body = req.body;
 
@@ -50,32 +43,49 @@ router.post('/', async (req, res) => {
                 const from = message.from;
                 const msgBody = message.text ? message.text.body : "";
 
-                if (!msgBody) return res.sendStatus(200);
+                if (!msgBody) {
+                    console.log('Message vide ou non textuel reçu. On ignore.');
+                    return res.sendStatus(200);
+                }
 
-                console.log(`Traitement du message de ${from}: ${msgBody}`);
+                console.log(`[1/8] Message de ${from}: "${msgBody}"`);
 
                 // 1. Get or Create Conversation
+                console.log(`[2/8] Recherche de la conversation pour ${from}...`);
                 let { data: conv, error: convError } = await supabase
                     .from('conversations')
                     .select('id')
-                    .eq('user_phone', from)
+                    .eq('user_identifier', from)
                     .single();
 
                 if (convError || !conv) {
+                    console.log(`[2/8] Conversation non trouvée, création d'une nouvelle...`);
                     const { data: newConv, error: createError } = await supabase
                         .from('conversations')
-                        .insert([{ user_phone: from }])
+                        .insert([{ 
+                            user_identifier: from,
+                            platform: 'whatsapp'
+                        }])
                         .select()
                         .single();
+                    
+                    if (createError) {
+                        console.error('Erreur lors de la création de la conversation:', createError);
+                        throw createError;
+                    }
                     conv = newConv;
                 }
+                console.log(`[2/8] ID Conversation: ${conv.id}`);
 
                 // 2. Save User Message
-                await supabase.from('messages').insert([
+                console.log(`[3/8] Sauvegarde du message utilisateur dans Supabase...`);
+                const { error: msgError } = await supabase.from('messages').insert([
                     { conversation_id: conv.id, sender: 'user', content: msgBody }
                 ]);
+                if (msgError) console.error('Erreur sauvegarde message utilisateur:', msgError);
 
                 // 3. Get Chat History for Context
+                console.log(`[4/8] Récupération de l'historique...`);
                 const { data: history } = await supabase
                     .from('messages')
                     .select('sender, content')
@@ -84,53 +94,77 @@ router.post('/', async (req, res) => {
                     .limit(10);
 
                 // 4. Get AI Response and Intent
-                const aiResult = await getAIResponse(msgBody, history);
+                console.log(`[5/8] Appel à Gemini AI...`);
+                const aiResult = await getAIResponse(msgBody, history || []);
+                console.log(`[5/8] Réponse AI: "${aiResult.response.substring(0, 50)}..." | Intent: ${aiResult.intent}`);
 
                 // 5. Save Bot Message
-                await supabase.from('messages').insert([
-                    { conversation_id: conv.id, sender: 'bot', content: aiResult.response }
+                console.log(`[6/8] Sauvegarde de la réponse AI...`);
+                const { error: aiMsgError } = await supabase.from('messages').insert([
+                    { conversation_id: conv.id, sender: 'ai', content: aiResult.response }
                 ]);
+                if (aiMsgError) console.error('Erreur sauvegarde message AI:', aiMsgError);
 
                 // 6. Handle Intent-specific tables
                 if (aiResult.intent === 'claim') {
+                    console.log(`[Intent] Création d'un sinistre...`);
                     await supabase.from('claims').insert([
-                        { conversation_id: conv.id, user_phone: from, details: aiResult.data }
+                        { 
+                            conversation_id: conv.id, 
+                            description: aiResult.data.description || msgBody,
+                            status: 'pending'
+                        }
                     ]);
                 } else if (aiResult.intent === 'quote') {
+                    console.log(`[Intent] Création d'un devis...`);
                     await supabase.from('quotes').insert([
                         { 
                             conversation_id: conv.id, 
-                            user_phone: from, 
-                            insurance_type: aiResult.data.type || 'unknown',
-                            details: aiResult.data 
+                            insurance_type: aiResult.data.type || 'auto',
+                            details: aiResult.data,
+                            status: 'pending'
                         }
                     ]);
                 }
 
                 // 7. Send message back to WhatsApp
-                await axios({
-                    method: 'POST',
-                    url: `https://graph.facebook.com/v19.0/${PHONE_NUMBER_ID}/messages`,
-                    data: {
-                        messaging_product: 'whatsapp',
-                        to: from,
-                        type: 'text',
-                        text: { body: aiResult.response }
-                    },
-                    headers: { 'Authorization': `Bearer ${WHATSAPP_TOKEN}` }
-                });
+                console.log(`[7/8] Envoi de la réponse à WhatsApp (Phone ID: ${PHONE_NUMBER_ID})...`);
+                try {
+                    const waResponse = await axios({
+                        method: 'POST',
+                        url: `https://graph.facebook.com/v19.0/${PHONE_NUMBER_ID}/messages`,
+                        data: {
+                            messaging_product: 'whatsapp',
+                            to: from,
+                            type: 'text',
+                            text: { body: aiResult.response }
+                        },
+                        headers: { 'Authorization': `Bearer ${WHATSAPP_TOKEN}` }
+                    });
+                    console.log(`[7/8] WhatsApp a répondu: ${waResponse.status} ${waResponse.statusText}`);
+                } catch (waErr) {
+                    console.error('[7/8] Erreur lors de l\'envoi WhatsApp:', waErr.response ? JSON.stringify(waErr.response.data) : waErr.message);
+                }
 
                 // 8. Update last interaction
-                await supabase.from('conversations').update({ last_interaction: new Date() }).eq('id', conv.id);
+                console.log(`[8/8] Mise à jour de la date de dernière interaction...`);
+                await supabase.from('conversations')
+                    .update({ last_message_at: new Date() })
+                    .eq('id', conv.id);
+                
+                console.log('=== TRAITEMENT TERMINE AVEC SUCCES ===');
             }
             res.sendStatus(200);
         } else {
+            console.log('Objet non géré (pas une notification WhatsApp)');
             res.sendStatus(404);
         }
     } catch (error) {
-        console.error('Erreur:', error.message, error.stack);
+        console.error('=== ERREUR CRITIQUE ===');
+        console.error('Message:', error.message);
+        console.error('Stack:', error.stack);
         if (error.response) {
-            console.error('Détails de la réponse WhatsApp:', JSON.stringify(error.response.data, null, 2));
+            console.error('Détails erreur API:', JSON.stringify(error.response.data, null, 2));
         }
         res.sendStatus(500);
     }

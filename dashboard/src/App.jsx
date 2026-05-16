@@ -40,9 +40,9 @@ function App() {
 
   const fetchData = async () => {
     const [convs, clms, qts] = await Promise.all([
-      supabase.from('conversations').select('*').order('last_interaction', { ascending: false }),
-      supabase.from('claims').select('*').order('created_at', { ascending: false }),
-      supabase.from('quotes').select('*').order('created_at', { ascending: false })
+      supabase.from('conversations').select('*').order('last_message_at', { ascending: false }),
+      supabase.from('claims').select('*, conversations(user_identifier)').order('created_at', { ascending: false }),
+      supabase.from('quotes').select('*, conversations(user_identifier)').order('created_at', { ascending: false })
     ]);
 
     setData({
@@ -150,13 +150,13 @@ function ConversationCard({ conv }) {
   return (
     <div className="glass" style={{ padding: '20px', cursor: 'pointer' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
-        <span style={{ fontWeight: '700', fontSize: '18px' }}>+{conv.user_phone}</span>
+        <span style={{ fontWeight: '700', fontSize: '18px' }}>+{conv.user_identifier}</span>
         <span className={`status-badge status-${conv.status === 'active' ? 'validated' : 'pending'}`}>
           {conv.status}
         </span>
       </div>
       <p style={{ color: 'var(--text-dim)', fontSize: '14px' }}>
-        Dernière activité : {format(new Date(conv.last_interaction), 'HH:mm, d MMM', { locale: fr })}
+        Dernière activité : {format(new Date(conv.last_message_at), 'HH:mm, d MMM', { locale: fr })}
       </p>
     </div>
   );
@@ -173,7 +173,7 @@ function ClaimCard({ claim }) {
       </div>
       <div style={{ marginBottom: '10px' }}>
         <p style={{ fontSize: '13px', color: 'var(--text-dim)' }}>Client</p>
-        <p style={{ fontWeight: '500' }}>+{claim.user_phone}</p>
+        <p style={{ fontWeight: '500' }}>+{claim.conversations?.user_identifier || 'Inconnu'}</p>
       </div>
       <div>
         <p style={{ fontSize: '13px', color: 'var(--text-dim)' }}>Détails</p>
@@ -194,7 +194,7 @@ function QuoteCard({ quote }) {
       </div>
       <div style={{ marginBottom: '10px' }}>
         <p style={{ fontSize: '13px', color: 'var(--text-dim)' }}>Client</p>
-        <p style={{ fontWeight: '500' }}>+{quote.user_phone}</p>
+        <p style={{ fontWeight: '500' }}>+{quote.conversations?.user_identifier || 'Inconnu'}</p>
       </div>
       <p style={{ fontSize: '12px', color: 'var(--text-dim)', marginTop: '10px' }}>
         Reçu le {format(new Date(quote.created_at), 'd MMMM yyyy', { locale: fr })}
