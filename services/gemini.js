@@ -32,7 +32,10 @@ Si l'utilisateur demande un prix ou un devis, l'intent est "quote".
 
 async function getAIResponse(userMessage, history = []) {
     try {
-        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
+        const model = genAI.getGenerativeModel({ 
+            model: "gemini-1.5-flash",
+            systemInstruction: SYSTEM_PROMPT 
+        });
 
         const chat = model.startChat({
             history: history.map(h => ({
@@ -44,9 +47,11 @@ async function getAIResponse(userMessage, history = []) {
             },
         });
 
-        const result = await chat.sendMessage(SYSTEM_PROMPT + "\n\nMessage client : " + userMessage);
+        const result = await chat.sendMessage("Message client : " + userMessage);
         const response = await result.response;
-        return JSON.parse(response.text());
+        const text = response.text();
+        console.log("Gemini Raw Response:", text);
+        return JSON.parse(text);
     } catch (error) {
         console.error("Error with Gemini:", error);
         return {

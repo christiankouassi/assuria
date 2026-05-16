@@ -13,7 +13,6 @@ import {
   Cpu,
   UserCheck
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
@@ -84,6 +83,7 @@ function App() {
   };
 
   const handleSelectConversation = (conv) => {
+    console.log("Selecting conversation:", conv.id);
     setSelectedConversation(conv);
     fetchMessages(conv.id);
   };
@@ -171,7 +171,7 @@ function App() {
 
         {activeTab === 'conversations' ? (
           <div className="chat-layout">
-            <div className="chat-list card-grid">
+            <div className="chat-list" style={{ overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {data.conversations.map(conv => (
                 <div 
                   key={conv.id} 
