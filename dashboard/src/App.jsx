@@ -41,6 +41,18 @@ function App() {
     localStorage.setItem('theme', theme);
   }, [theme]);
 
+  const safeFormat = (dateStr, formatPattern, options = {}) => {
+    if (!dateStr) return '';
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return '';
+      return format(d, formatPattern, options);
+    } catch (e) {
+      console.warn("Date formatting error:", e);
+      return '';
+    }
+  };
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
@@ -316,7 +328,7 @@ function App() {
       Client: `+${c.conversations?.user_identifier}`,
       Description: c.description || JSON.stringify(c.details),
       Statut: c.status,
-      Date: format(new Date(c.created_at), 'dd/MM/yyyy HH:mm')
+      Date: safeFormat(c.created_at, 'dd/MM/yyyy HH:mm')
     }));
     exportToExcel(exportData, 'Sinistres_Assuria');
   };
@@ -328,7 +340,7 @@ function App() {
       Type: q.insurance_type,
       Détails: JSON.stringify(q.details),
       Statut: q.status,
-      Date: format(new Date(q.created_at), 'dd/MM/yyyy HH:mm')
+      Date: safeFormat(q.created_at, 'dd/MM/yyyy HH:mm')
     }));
     exportToExcel(exportData, 'Devis_Assuria');
   };
@@ -362,8 +374,8 @@ function App() {
   const last7Days = Array.from({length: 7}, (_, i) => {
     const d = subDays(new Date(), 6 - i);
     return {
-      date: format(d, 'dd MMM', { locale: fr }),
-      rawDate: format(d, 'yyyy-MM-dd')
+      date: safeFormat(d, 'dd MMM', { locale: fr }),
+      rawDate: safeFormat(d, 'yyyy-MM-dd')
     };
   });
 
@@ -386,7 +398,7 @@ function App() {
       notificationsCount={notifications.filter(n => !n.read).length}
       toggleNotifications={() => setShowNotifications(!showNotifications)}
     >
-      <div className="content-area">
+      <div className={`content-area ${activeTab === 'conversations' ? 'h-full flex flex-col overflow-hidden flex-1' : ''}`}>
           {activeTab === 'dashboard' ? (
             <div className="space-y-xl max-w-[1440px] mx-auto">
               {/* Header Section */}
@@ -511,7 +523,7 @@ function App() {
                             </div>
                           </div>
                           <div className="text-right flex-shrink-0">
-                            <p className="text-error font-bold text-body-md m-0">{format(new Date(conv.last_message.created_at), 'HH:mm')}</p>
+                            <p className="text-error font-bold text-body-md m-0">{safeFormat(conv.last_message.created_at, 'HH:mm')}</p>
                             <p className="text-[10px] uppercase tracking-wider text-error/60 m-0">En attente</p>
                           </div>
                         </div>
@@ -558,7 +570,7 @@ function App() {
                               +{conv.user_identifier}
                             </h3>
                             <span className="text-[10px] text-on-surface-variant font-medium">
-                              {conv.last_message ? format(new Date(conv.last_message.created_at), 'HH:mm') : ''}
+                              {conv.last_message ? safeFormat(conv.last_message.created_at, 'HH:mm') : ''}
                             </span>
                           </div>
                           <p className={`text-body-sm truncate ${selectedConversation?.id === conv.id ? 'text-primary font-medium' : 'text-on-surface-variant'}`}>
@@ -641,7 +653,7 @@ function App() {
                             </div>
                           </div>
                           <span className={`text-[10px] text-on-surface-variant mt-1 font-medium ${msg.sender === 'user' ? 'ml-1 text-left' : 'mr-1 text-right'}`}>
-                            {format(new Date(msg.created_at), 'HH:mm')}
+                            {safeFormat(msg.created_at, 'HH:mm')}
                           </span>
                         </div>
                       ))}
@@ -693,13 +705,7 @@ function App() {
               {/* Panel 3: Client Info Card */}
               {selectedConversation && (() => {
                 const clientContext = selectedConversation.client_profile || {};
-                const safeCreatedAt = (() => {
-                  try {
-                    return selectedConversation.created_at ? format(new Date(selectedConversation.created_at), 'dd/MM/yyyy') : 'Non renseigné';
-                  } catch (e) {
-                    return 'Non renseigné';
-                  }
-                })();
+                const safeCreatedAt = safeFormat(selectedConversation.created_at, 'dd/MM/yyyy') || 'Non renseigné';
                 const safeId = selectedConversation.id ? selectedConversation.id.slice(0, 8) : '';
                 return (
                   <section className="w-80 border-l border-outline-variant bg-surface flex flex-col p-lg custom-scrollbar overflow-y-auto">
@@ -840,7 +846,7 @@ function App() {
                             )}
                           </td>
                           <td className="px-6 py-4 text-on-surface-variant text-sm">
-                            {format(new Date(claim.created_at), 'd MMM yyyy', { locale: fr })}
+                            {safeFormat(claim.created_at, 'd MMM yyyy', { locale: fr })}
                           </td>
                         </tr>
                       ))}
@@ -888,7 +894,7 @@ function App() {
                             </span>
                           </td>
                           <td className="px-6 py-4 text-on-surface-variant text-sm">
-                            {format(new Date(quote.created_at), 'd MMM yyyy', { locale: fr })}
+                            {safeFormat(quote.created_at, 'd MMM yyyy', { locale: fr })}
                           </td>
                         </tr>
                       ))}
@@ -982,12 +988,7 @@ function App() {
                                 })()}
                               </td>
                               <td className="px-6 py-4 text-[13px] text-on-surface-variant">
-                                {file.created_at ? (
-                                  (() => {
-                                    try { return format(new Date(file.created_at), 'd MMM yyyy HH:mm', { locale: fr }) }
-                                    catch (e) { return 'Date invalide' }
-                                  })()
-                                ) : 'Date inconnue'}
+                                {safeFormat(file.created_at, 'd MMM yyyy HH:mm', { locale: fr }) || 'Date inconnue'}
                               </td>
                               <td className="px-6 py-4">
                                 <div className="flex items-start gap-3 max-w-[500px]">
