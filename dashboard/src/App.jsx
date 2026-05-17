@@ -691,73 +691,84 @@ function App() {
               </section>
 
               {/* Panel 3: Client Info Card */}
-              {selectedConversation && (
-                <section className="w-80 border-l border-outline-variant bg-surface flex flex-col p-lg custom-scrollbar overflow-y-auto">
-                  <div className="flex flex-col items-center mb-lg">
-                    <div className="relative mb-4">
-                      <div className="w-24 h-24 rounded-full border-4 border-surface-container-high bg-surface-container-highest flex items-center justify-center text-[36px] text-on-surface font-bold">
-                        {selectedConversation.user_identifier.substring(0, 2).toUpperCase()}
+              {selectedConversation && (() => {
+                const clientContext = selectedConversation.client_profile || {};
+                const safeCreatedAt = (() => {
+                  try {
+                    return selectedConversation.created_at ? format(new Date(selectedConversation.created_at), 'dd/MM/yyyy') : 'Non renseigné';
+                  } catch (e) {
+                    return 'Non renseigné';
+                  }
+                })();
+                const safeId = selectedConversation.id ? selectedConversation.id.slice(0, 8) : '';
+                return (
+                  <section className="w-80 border-l border-outline-variant bg-surface flex flex-col p-lg custom-scrollbar overflow-y-auto">
+                    <div className="flex flex-col items-center mb-lg">
+                      <div className="relative mb-4">
+                        <div className="w-24 h-24 rounded-full border-4 border-surface-container-high bg-surface-container-highest flex items-center justify-center text-[36px] text-on-surface font-bold">
+                          {selectedConversation.user_identifier ? selectedConversation.user_identifier.substring(0, 2).toUpperCase() : ''}
+                        </div>
+                        <div className="absolute bottom-1 right-1 w-6 h-6 bg-[#25D366] rounded-full border-2 border-surface flex items-center justify-center">
+                          <img alt="WhatsApp" className="w-4 h-4" src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" />
+                        </div>
                       </div>
-                      <div className="absolute bottom-1 right-1 w-6 h-6 bg-[#25D366] rounded-full border-2 border-surface flex items-center justify-center">
-                        <img alt="WhatsApp" className="w-4 h-4" src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" />
-                      </div>
+                      <h3 className="font-headline-md text-on-surface text-center">+{selectedConversation.user_identifier}</h3>
+                      <p className="text-body-sm text-on-surface-variant">ID: {safeId}</p>
                     </div>
-                    <h3 className="font-headline-md text-on-surface text-center">+{selectedConversation.user_identifier}</h3>
-                    <p className="text-body-sm text-on-surface-variant">ID: {selectedConversation.id.slice(0,8)}</p>
-                  </div>
 
-                  <div className="space-y-6">
-                    {/* Client Details */}
-                    <div className="space-y-4">
-                      <h4 className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">Informations</h4>
+                    <div className="space-y-6">
+                      {/* Client Details */}
+                      <div className="space-y-4">
+                        <h4 className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">Informations</h4>
+                        <div className="space-y-3">
+                          <div className="flex items-center gap-3">
+                            <span className="material-symbols-outlined text-on-surface-variant text-[20px]">call</span>
+                            <span className="text-body-sm">+{selectedConversation.user_identifier}</span>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <span className="material-symbols-outlined text-on-surface-variant text-[20px]">calendar_today</span>
+                            <span className="text-body-sm">Inscrit le {safeCreatedAt}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Quick Actions */}
                       <div className="space-y-3">
-                        <div className="flex items-center gap-3">
-                          <span className="material-symbols-outlined text-on-surface-variant text-[20px]">call</span>
-                          <span className="text-body-sm">+{selectedConversation.user_identifier}</span>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <span className="material-symbols-outlined text-on-surface-variant text-[20px]">calendar_today</span>
-                          <span className="text-body-sm">Inscrit le {format(new Date(selectedConversation.created_at), 'dd/MM/yyyy')}</span>
-                        </div>
+                        <h4 className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">Actions Rapides</h4>
+                        <button className="w-full py-2.5 px-4 rounded-xl border border-outline-variant text-body-sm font-bold hover:bg-surface-container-high transition-colors text-left flex items-center gap-3 text-on-surface">
+                          <span className="material-symbols-outlined text-[20px]">visibility</span>
+                          Voir les dossiers
+                        </button>
+                        <button className="w-full py-2.5 px-4 rounded-xl border border-outline-variant text-body-sm font-bold hover:bg-surface-container-high transition-colors text-left flex items-center gap-3 text-on-surface">
+                          <span className="material-symbols-outlined text-[20px]">receipt_long</span>
+                          Envoyer un document
+                        </button>
+                        <button className="w-full py-2.5 px-4 rounded-xl border border-error/20 text-error text-body-sm font-bold hover:bg-error/5 transition-colors text-left flex items-center gap-3">
+                          <span className="material-symbols-outlined text-[20px]">block</span>
+                          Fermer la session
+                        </button>
                       </div>
-                    </div>
 
-                    {/* Quick Actions */}
-                    <div className="space-y-3">
-                      <h4 className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">Actions Rapides</h4>
-                      <button className="w-full py-2.5 px-4 rounded-xl border border-outline-variant text-body-sm font-bold hover:bg-surface-container-high transition-colors text-left flex items-center gap-3 text-on-surface">
-                        <span className="material-symbols-outlined text-[20px]">visibility</span>
-                        Voir les dossiers
-                      </button>
-                      <button className="w-full py-2.5 px-4 rounded-xl border border-outline-variant text-body-sm font-bold hover:bg-surface-container-high transition-colors text-left flex items-center gap-3 text-on-surface">
-                        <span className="material-symbols-outlined text-[20px]">receipt_long</span>
-                        Envoyer un document
-                      </button>
-                      <button className="w-full py-2.5 px-4 rounded-xl border border-error/20 text-error text-body-sm font-bold hover:bg-error/5 transition-colors text-left flex items-center gap-3">
-                        <span className="material-symbols-outlined text-[20px]">block</span>
-                        Fermer la session
-                      </button>
+                      {/* AI Insights Mini-Card */}
+                      {Object.keys(clientContext).length > 0 && (
+                        <div className="p-md rounded-2xl ai-message mt-4 shadow-md border border-primary/20">
+                          <div className="flex items-center gap-2 mb-3">
+                            <span className="material-symbols-outlined text-primary text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>analytics</span>
+                            <span className="text-[10px] font-bold text-primary uppercase">Mémoire IA (Contexte)</span>
+                          </div>
+                          <div className="text-[12px] text-on-surface leading-relaxed space-y-2">
+                            {Object.entries(clientContext).map(([key, value]) => (
+                              <div key={key}>
+                                <span className="text-on-surface-variant capitalize">{key}:</span> <span className="font-bold">{typeof value === 'object' ? JSON.stringify(value) : value}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
-
-                    {/* AI Insights Mini-Card */}
-                    {Object.keys(clientContext).length > 0 && (
-                      <div className="p-md rounded-2xl ai-message mt-4 shadow-md border border-primary/20">
-                        <div className="flex items-center gap-2 mb-3">
-                          <span className="material-symbols-outlined text-primary text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>analytics</span>
-                          <span className="text-[10px] font-bold text-primary uppercase">Mémoire IA (Contexte)</span>
-                        </div>
-                        <div className="text-[12px] text-on-surface leading-relaxed space-y-2">
-                          {Object.entries(clientContext).map(([key, value]) => (
-                            <div key={key}>
-                              <span className="text-on-surface-variant capitalize">{key}:</span> <span className="font-bold">{typeof value === 'object' ? JSON.stringify(value) : value}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </section>
-              )}
+                  </section>
+                );
+              })()}
             </div>
 
           ) : activeTab === 'claims' ? (
