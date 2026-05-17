@@ -151,11 +151,19 @@ async function processMessage(body) {
             const extractedType = analysis.extracted_data?.type || 'autre';
             console.log(`[Media] Analyse Claude Vision: Type=${extractedType}, Desc=${desc.substring(0, 50)}...`);
 
-            // Sauvegarde le message utilisateur (l'image)
+            // Construction du contexte d'image détaillé
+            const imageContext = `[ANALYSE IMAGE - ${extractedType}]
+Informations extraites de l'image :
+${JSON.stringify(analysis.extracted_data?.fields || {}, null, 2)}
+Description : ${desc}
+
+INSTRUCTION : Affiche TOUTES ces informations extraites au client sous forme de liste claire, puis demande confirmation. Ne pose pas de question sans d'abord montrer les données.`;
+
+            // Sauvegarde le message utilisateur (l'image) avec le contexte structuré pour ne pas perdre l'historique
             const { error: msgErr } = await supabase.from('messages').insert([{
                 conversation_id: conv.id,
                 sender: 'user',
-                content: caption || 'Photo reçue',
+                content: imageContext,
                 media_url: url,
                 media_type: mimeType,
                 media_description: desc
@@ -179,17 +187,7 @@ async function processMessage(body) {
                     .eq('id', pendingClaim.id);
             }
 
-            // Génère une réponse intelligente de l'IA en lui soumettant la description de l'image
-            let aiPrompt = `[Photo reçue] ${desc}`;
-            if (extractedType === 'carte_grise') {
-                aiPrompt = `[Analyse d'image de carte grise] : ${desc}`;
-            } else if (extractedType === 'cni') {
-                aiPrompt = `[Analyse de CNI] : ${desc}`;
-            } else if (extractedType === 'dommages') {
-                aiPrompt = `[Description de dommages sur un véhicule ou bien] : ${desc}`;
-            }
-
-            // Récupère l'historique pour le contexte de l'assistant
+            // Récupère l'historique pour le contexte de l'assistant (qui contient maintenant le message utilisateur avec imageContext)
             const { data: history } = await supabase
                 .from('messages')
                 .select('sender, content')
@@ -197,7 +195,7 @@ async function processMessage(body) {
                 .order('created_at', { ascending: true })
                 .limit(10);
 
-            const aiResult = await getAIResponse(aiPrompt, history || []);
+            const aiResult = await getAIResponse(imageContext, history || []);
 
             // Sauvegarde de la réponse de l'assistant
             await supabase.from('messages').insert([{
@@ -207,7 +205,7 @@ async function processMessage(body) {
             }]);
 
             // Gère l'intention
-            await handleIntent(conv.id, aiPrompt, aiResult);
+            await handleIntent(conv.id, imageContext, aiResult);
 
             // Répondre au client
             await sendWhatsAppMessage(from, aiResult.response);

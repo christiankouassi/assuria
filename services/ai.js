@@ -50,8 +50,14 @@ Omets les champs data que tu ne connais pas encore.`;
 async function getAIResponse(userMessage, history = []) {
     console.log('Appel Claude API...');
     try {
+        let filteredHistory = [...history];
+        if (filteredHistory.length > 0 && 
+            filteredHistory[filteredHistory.length - 1].content === userMessage && 
+            filteredHistory[filteredHistory.length - 1].sender === 'user') {
+            filteredHistory.pop();
+        }
         const messages = [
-            ...history.map(h => ({
+            ...filteredHistory.map(h => ({
                 role: h.sender === 'ai' ? 'assistant' : 'user',
                 content: h.sender === 'advisor' 
                     ? `[Conseiller humain]: ${h.content}` 
