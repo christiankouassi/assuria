@@ -107,24 +107,76 @@ router.post('/', async (req, res) => {
 
                 // 6. Handle Intent-specific tables
                 if (aiResult.intent === 'claim') {
-                    console.log(`[Intent] Création d'un sinistre...`);
-                    await supabase.from('claims').insert([
-                        { 
+                    console.log(`[Intent] Recherche d'un sinistre en attente...`);
+                    const { data: existingClaim } = await supabase
+                        .from('claims')
+                        .select('id, description')
+                        .eq('conversation_id', conv.id)
+                        .eq('status', 'pending')
+                        .maybeSingle();
+
+                    if (existingClaim) {
+                        console.log(`[Intent] Sinistre en attente existant trouvé (${existingClaim.id}), mise à jour...`);
+                        const updatedClaim = {
+                            description: aiResult.data.description || msgBody
+                        };
+                        if (aiResult.data.policy_number) updatedClaim.policy_number = aiResult.data.policy_number;
+                        if (aiResult.data.client_name) updatedClaim.client_name = aiResult.data.client_name;
+
+                        const { error: claimUpdateErr } = await supabase
+                            .from('claims')
+                            .update(updatedClaim)
+                            .eq('id', existingClaim.id);
+                        if (claimUpdateErr) console.error('Erreur lors de la mise à jour du sinistre:', claimUpdateErr);
+                    } else {
+                        console.log(`[Intent] Aucun sinistre en attente, création d'un nouveau...`);
+                        const newClaim = { 
                             conversation_id: conv.id, 
                             description: aiResult.data.description || msgBody,
                             status: 'pending'
-                        }
-                    ]);
+                        };
+                        if (aiResult.data.policy_number) newClaim.policy_number = aiResult.data.policy_number;
+                        if (aiResult.data.client_name) newClaim.client_name = aiResult.data.client_name;
+
+                        const { error: claimInsertErr } = await supabase.from('claims').insert([newClaim]);
+                        if (claimInsertErr) console.error('Erreur lors de la création du sinistre:', claimInsertErr);
+                    }
                 } else if (aiResult.intent === 'quote') {
-                    console.log(`[Intent] Création d'un devis...`);
-                    await supabase.from('quotes').insert([
-                        { 
+                    console.log(`[Intent] Recherche d'un devis en attente...`);
+                    const { data: existingQuote } = await supabase
+                        .from('quotes')
+                        .select('id, details')
+                        .eq('conversation_id', conv.id)
+                        .eq('status', 'pending')
+                        .maybeSingle();
+
+                    if (existingQuote) {
+                        console.log(`[Intent] Devis en attente existant trouvé (${existingQuote.id}), mise à jour...`);
+                        const mergedDetails = { ...existingQuote.details, ...aiResult.data };
+                        const updatedQuote = {
+                            insurance_type: aiResult.data.type || 'auto',
+                            details: mergedDetails
+                        };
+                        if (aiResult.data.client_name) updatedQuote.client_name = aiResult.data.client_name;
+
+                        const { error: quoteUpdateErr } = await supabase
+                            .from('quotes')
+                            .update(updatedQuote)
+                            .eq('id', existingQuote.id);
+                        if (quoteUpdateErr) console.error('Erreur lors de la mise à jour du devis:', quoteUpdateErr);
+                    } else {
+                        console.log(`[Intent] Aucun devis en attente, création d'un nouveau...`);
+                        const newQuote = { 
                             conversation_id: conv.id, 
                             insurance_type: aiResult.data.type || 'auto',
                             details: aiResult.data,
                             status: 'pending'
-                        }
-                    ]);
+                        };
+                        if (aiResult.data.client_name) newQuote.client_name = aiResult.data.client_name;
+
+                        const { error: quoteInsertErr } = await supabase.from('quotes').insert([newQuote]);
+                        if (quoteInsertErr) console.error('Erreur lors de la création du devis:', quoteInsertErr);
+                    }
                 }
 
                 // 7. Send message back to WhatsApp

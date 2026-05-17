@@ -97,7 +97,7 @@ function App() {
 
   const fetchData = async () => {
     const [convs, clms, qts, msgs] = await Promise.all([
-      supabase.from('conversations').select('*, messages(content, created_at, sender)').order('last_interaction', { ascending: false }),
+      supabase.from('conversations').select('*, messages(content, created_at, sender)').order('last_message_at', { ascending: false }),
       supabase.from('claims').select('*, conversations(user_identifier)').order('created_at', { ascending: false }),
       supabase.from('quotes').select('*, conversations(user_identifier)').order('created_at', { ascending: false }),
       supabase.from('messages').select('*') // For stats
