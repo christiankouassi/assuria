@@ -4,7 +4,7 @@ import {
   MessageSquare, ShieldAlert, FileText, LayoutDashboard,
   Search, Bell, User, Send, Cpu, UserCheck, 
   Moon, Sun, Download, HelpCircle, AlertCircle,
-  FolderOpen, Copy, Check
+  FolderOpen, Copy, Check, Play
 } from 'lucide-react';
 import { format, subDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
