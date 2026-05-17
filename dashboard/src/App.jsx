@@ -3,7 +3,8 @@ import { supabase } from './lib/supabase';
 import { 
   MessageSquare, ShieldAlert, FileText, LayoutDashboard,
   Search, Bell, User, Send, Cpu, UserCheck, 
-  Moon, Sun, Download, HelpCircle, AlertCircle
+  Moon, Sun, Download, HelpCircle, AlertCircle,
+  FolderOpen, Copy, Check
 } from 'lucide-react';
 import { format, subDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -30,6 +31,8 @@ function App() {
   
   const [theme, setTheme] = useState(localStorage.getItem('theme') || 'dark');
   const [unreadCounts, setUnreadCounts] = useState({});
+  const [clientFiles, setClientFiles] = useState([]);
+  const [copiedId, setCopiedId] = useState(null);
   const audioRef = useRef(typeof Audio !== "undefined" ? new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3') : null);
 
   useEffect(() => {
@@ -41,6 +44,109 @@ function App() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
+  const renderMessageContent = (msg) => {
+    if (msg.media_type) {
+      if (msg.media_type.includes('image')) {
+        return (
+          <div 
+            style={{ cursor: 'pointer', position: 'relative', overflow: 'hidden', borderRadius: '12px' }} 
+            onClick={() => setLightboxMedia({ url: msg.media_url, description: msg.media_description || msg.content })}
+          >
+            <img 
+              src={msg.media_url} 
+              alt={msg.content} 
+              style={{ display: 'block', maxWidth: '240px', maxHeight: '180px', borderRadius: '12px', objectFit: 'cover' }} 
+            />
+          </div>
+        );
+      } else if (msg.media_type.includes('audio')) {
+        return (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 6px' }}>
+            <span style={{ fontSize: '20px', flexShrink: 0 }}>🎙️</span>
+            <audio src={msg.media_url} controls style={{ height: '32px', width: '210px' }} />
+          </div>
+        );
+      } else if (msg.media_type.includes('pdf') || msg.media_type.includes('document') || msg.media_type.includes('word') || msg.media_type.includes('officedocument')) {
+        return (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', background: 'rgba(239, 68, 68, 0.08)', padding: '10px 14px', borderRadius: '12px', border: '1px solid rgba(239, 68, 68, 0.2)', width: '260px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '40px', height: '40px', borderRadius: '8px', background: 'rgba(239, 68, 68, 0.15)', color: '#ef4444', flexShrink: 0 }}>
+              <FileText size={24} />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
+              <span style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {msg.content?.startsWith('Document reçu:') ? msg.content.replace('Document reçu:', '').trim() : (msg.content || 'Document')}
+              </span>
+              <span style={{ fontSize: '11px', color: 'var(--text-dim)' }}>
+                {msg.media_type.split('/')[1]?.toUpperCase() || 'PDF'}
+              </span>
+            </div>
+            <a href={msg.media_url} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px', borderRadius: '50%', background: 'var(--primary)', color: 'white', cursor: 'pointer', flexShrink: 0 }}>
+              <Download size={16} />
+            </a>
+          </div>
+        );
+      }
+    }
+    return <div style={{ fontSize: '14px', lineHeight: '1.5', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{msg.content}</div>;
+  };
+
+  const formatLastMessagePreview = (lastMsg) => {
+    if (!lastMsg) return 'Nouvelle conversation';
+    if (lastMsg.media_type) {
+      if (lastMsg.media_type.includes('image')) return '📷 Photo';
+      if (lastMsg.media_type.includes('audio')) return '🎙️ Message vocal';
+      if (lastMsg.media_type.includes('pdf') || lastMsg.media_type.includes('document') || lastMsg.media_type.includes('word') || lastMsg.media_type.includes('officedocument')) return '📄 Document';
+    }
+    return lastMsg.content;
+  };
+
+  const updateConversationLastMessage = (newMsg) => {
+    setData(prev => {
+      const updatedConversations = prev.conversations.map(c => {
+        if (c.id === newMsg.conversation_id) {
+          return {
+            ...c,
+            last_message_at: newMsg.created_at,
+            last_message: {
+              content: newMsg.content,
+              created_at: newMsg.created_at,
+              sender: newMsg.sender,
+              media_type: newMsg.media_type
+            }
+          };
+        }
+        return c;
+      });
+
+      // Sort conversations in-memory by last_message_at descending
+      const sortedConversations = [...updatedConversations].sort((a, b) => {
+        const dateA = a.last_message_at ? new Date(a.last_message_at) : new Date(0);
+        const dateB = b.last_message_at ? new Date(b.last_message_at) : new Date(0);
+        return dateB - dateA;
+      });
+
+      return {
+        ...prev,
+        conversations: sortedConversations
+      };
+    });
+
+    if (newMsg.media_type) {
+      setClientFiles(prev => {
+        if (prev.some(f => f.id === newMsg.id)) return prev;
+        // Try to find conversation identifier
+        const conv = data.conversations.find(c => c.id === newMsg.conversation_id);
+        const fileWithConv = {
+          ...newMsg,
+          conversations: {
+            user_identifier: conv ? conv.user_identifier : 'client'
+          }
+        };
+        return [fileWithConv, ...prev];
+      });
+    }
+  };
+
   useEffect(() => {
     fetchData();
     
@@ -50,6 +156,7 @@ function App() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'quotes' }, fetchData)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
         handleGlobalNewMessage(payload);
+        updateConversationLastMessage(payload.new);
         fetchData(); // refresh data for dashboard and previews
       })
       .subscribe();
@@ -108,6 +215,7 @@ function App() {
           if (prev.some(m => m.id === payload.new.id)) return prev;
           return [...prev, payload.new];
         });
+        updateConversationLastMessage(payload.new);
       })
       .subscribe();
 
@@ -121,11 +229,12 @@ function App() {
   }, [chatMessages]);
 
   const fetchData = async () => {
-    const [convs, clms, qts, msgs] = await Promise.all([
-      supabase.from('conversations').select('*, messages(content, created_at, sender)').order('last_message_at', { ascending: false }),
+    const [convs, clms, qts, msgs, fileMsgs] = await Promise.all([
+      supabase.from('conversations').select('*, messages(content, created_at, sender, media_type)').order('last_message_at', { ascending: false }),
       supabase.from('claims').select('*, conversations(user_identifier)').order('created_at', { ascending: false }),
       supabase.from('quotes').select('*, conversations(user_identifier)').order('created_at', { ascending: false }),
-      supabase.from('messages').select('*') // For stats
+      supabase.from('messages').select('*'), // For stats
+      supabase.from('messages').select('*, conversations(user_identifier)').not('media_type', 'is', null).order('created_at', { ascending: false })
     ]);
 
     const formattedConvs = (convs.data || []).map(c => {
@@ -142,6 +251,7 @@ function App() {
       quotes: qts.data || [],
       messages: msgs.data || []
     });
+    setClientFiles(fileMsgs.data || []);
     setLoading(false);
   };
 
@@ -287,6 +397,12 @@ function App() {
             onClick={() => setActiveTab('quotes')}
             icon={<FileText size={20} />}
             label="Devis"
+          />
+          <NavItem 
+            active={activeTab === 'files'} 
+            onClick={() => setActiveTab('files')}
+            icon={<FolderOpen size={20} />}
+            label="Fichiers"
           />
           <div style={{ marginTop: 'auto', marginBottom: '10px' }}>
             <NavItem 
@@ -438,7 +554,7 @@ function App() {
                             </span>
                           </div>
                           <p style={{ margin: 0, fontSize: '13px', color: 'var(--text-dim)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            {conv.last_message.content}
+                            {formatLastMessagePreview(conv.last_message)}
                           </p>
                         </div>
                       ))}
@@ -469,7 +585,7 @@ function App() {
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <p style={{ margin: 0, fontSize: '13px', color: 'var(--text-dim)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '80%' }}>
-                        {conv.last_message ? conv.last_message.content : 'Nouvelle conversation'}
+                        {formatLastMessagePreview(conv.last_message)}
                       </p>
                       {unreadCounts[conv.id] > 0 && (
                         <div style={{ background: '#ef4444', color: 'white', fontSize: '10px', fontWeight: 'bold', width: '20px', height: '20px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -504,30 +620,19 @@ function App() {
                     <div className="messages-container" style={{ flex: 1, padding: '24px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
                       {chatMessages.map(msg => (
                         <div key={msg.id} style={{ display: 'flex', flexDirection: 'column', alignItems: msg.sender === 'user' ? 'flex-end' : 'flex-start' }}>
-                          <div className={`message-bubble ${msg.sender === 'user' ? 'message-user' : 'message-ai'}`} style={{ marginBottom: '4px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                            {msg.media_url && msg.media_type && msg.media_type.startsWith('image/') && (
-                              <img 
-                                src={msg.media_url} 
-                                alt={msg.media_description || "Image"} 
-                                style={{ maxWidth: '240px', maxHeight: '180px', borderRadius: '8px', cursor: 'pointer', objectFit: 'cover' }}
-                                onClick={() => setLightboxMedia({ url: msg.media_url, description: msg.media_description })}
-                              />
-                            )}
-                            {msg.media_url && msg.media_type && msg.media_type.startsWith('audio/') && (
-                              <audio src={msg.media_url} controls style={{ maxWidth: '240px' }} />
-                            )}
-                            {msg.media_url && msg.media_type && !msg.media_type.startsWith('image/') && !msg.media_type.startsWith('audio/') && (
-                              <a href={msg.media_url} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--primary)', textDecoration: 'underline', fontSize: '13px' }}>
-                                <Download size={16} />
-                                Document (+{msg.media_type.split('/')[1] || 'Fichier'})
-                              </a>
-                            )}
-                            <div>{msg.content}</div>
-                            {msg.media_description && msg.media_description !== msg.content && !msg.media_type?.startsWith('audio/') && (
-                              <div style={{ fontSize: '12px', opacity: 0.85, fontStyle: 'italic', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '4px' }}>
-                                {msg.media_description}
-                              </div>
-                            )}
+                          <div 
+                            className={`message-bubble ${msg.sender === 'user' ? 'message-user' : 'message-ai'}`} 
+                            style={{ 
+                              marginBottom: '4px', 
+                              padding: msg.media_type && msg.media_type.includes('image') ? '4px' : '10px 14px', 
+                              borderRadius: '16px', 
+                              maxWidth: '70%', 
+                              display: 'flex', 
+                              flexDirection: 'column', 
+                              gap: '6px' 
+                            }}
+                          >
+                            {renderMessageContent(msg)}
                           </div>
                           <span style={{ fontSize: '11px', color: 'var(--text-dim)', padding: '0 4px' }}>
                             {format(new Date(msg.created_at), 'HH:mm')}
@@ -667,6 +772,144 @@ function App() {
                         <td>{format(new Date(quote.created_at), 'd MMM yyyy', { locale: fr })}</td>
                       </tr>
                     ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : activeTab === 'files' ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h2 style={{ margin: 0, color: 'var(--text)' }}>Fichiers clients</h2>
+                <span style={{ fontSize: '14px', color: 'var(--text-dim)', fontWeight: '500' }}>
+                  {clientFiles.length} fichier(s) trouvé(s)
+                </span>
+              </div>
+
+              <div className="glass" style={{ padding: '10px', borderRadius: '12px', overflowX: 'auto' }}>
+                <table className="data-table" style={{ width: '100%', borderCollapse: 'collapse', color: 'var(--text)' }}>
+                  <thead>
+                    <tr style={{ textAlign: 'left', color: 'var(--text-dim)' }}>
+                      <th style={{ padding: '16px 20px', fontWeight: '500' }}>Client</th>
+                      <th style={{ padding: '16px 20px', fontWeight: '500' }}>Type</th>
+                      <th style={{ padding: '16px 20px', fontWeight: '500' }}>Aperçu</th>
+                      <th style={{ padding: '16px 20px', fontWeight: '500' }}>Date</th>
+                      <th style={{ padding: '16px 20px', fontWeight: '500' }}>Transcription / Description</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {clientFiles.length === 0 ? (
+                      <tr>
+                        <td colSpan="5" style={{ padding: '32px', textAlign: 'center', color: 'var(--text-dim)' }}>
+                          Aucun fichier média reçu pour le moment
+                        </td>
+                      </tr>
+                    ) : (
+                      clientFiles.map(file => {
+                        const isImage = file.media_type?.includes('image');
+                        const isAudio = file.media_type?.includes('audio');
+                        const isDoc = file.media_type?.includes('pdf') || file.media_type?.includes('document') || file.media_type?.includes('word') || file.media_type?.includes('officedocument');
+                        
+                        return (
+                          <tr key={file.id} style={{ borderBottom: '1px solid var(--glass-border)' }}>
+                            <td style={{ padding: '16px 20px', fontWeight: '600' }}>
+                              +{file.conversations?.user_identifier || 'Inconnu'}
+                            </td>
+                            <td style={{ padding: '16px 20px' }}>
+                              <span style={{ 
+                                display: 'inline-block', 
+                                padding: '4px 8px', 
+                                borderRadius: '6px', 
+                                fontSize: '11px', 
+                                fontWeight: '700', 
+                                textTransform: 'uppercase',
+                                background: isImage ? 'rgba(59, 130, 246, 0.15)' : isAudio ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                                color: isImage ? '#3b82f6' : isAudio ? '#10b981' : '#ef4444'
+                              }}>
+                                {isImage ? '📷 Image' : isAudio ? '🎙️ Vocal' : '📄 Document'}
+                              </span>
+                            </td>
+                            <td style={{ padding: '16px 20px' }}>
+                              {isImage && file.media_url && (
+                                <img 
+                                  src={file.media_url} 
+                                  alt="Miniature" 
+                                  style={{ width: '48px', height: '48px', borderRadius: '6px', objectFit: 'cover', cursor: 'pointer', border: '1px solid var(--glass-border)' }}
+                                  onClick={() => setLightboxMedia({ url: file.media_url, description: file.media_description || file.content })}
+                                />
+                              )}
+                              {isAudio && file.media_url && (
+                                <div 
+                                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '38px', height: '38px', borderRadius: '50%', background: 'rgba(16, 185, 129, 0.15)', color: '#10b981', cursor: 'pointer' }}
+                                  onClick={() => {
+                                    const audio = new Audio(file.media_url);
+                                    audio.play().catch(e => console.log('Playback failed', e));
+                                  }}
+                                  title="Lire le fichier audio"
+                                >
+                                  <Play size={18} fill="#10b981" />
+                                </div>
+                              )}
+                              {isDoc && (
+                                <a 
+                                  href={file.media_url} 
+                                  target="_blank" 
+                                  rel="noreferrer" 
+                                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '38px', height: '38px', borderRadius: '50%', background: 'rgba(239, 68, 68, 0.15)', color: '#ef4444', textDecoration: 'none' }}
+                                  title="Ouvrir le document"
+                                >
+                                  <FileText size={18} />
+                                </a>
+                              )}
+                            </td>
+                            <td style={{ padding: '16px 20px', fontSize: '13px', color: 'var(--text-dim)' }}>
+                              {format(new Date(file.created_at), 'd MMM yyyy HH:mm', { locale: fr })}
+                            </td>
+                            <td style={{ padding: '16px 20px' }}>
+                              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', maxWidth: '500px' }}>
+                                <div style={{ flex: 1, fontSize: '13px', lineHeight: '1.5', color: 'var(--text)', whiteSpace: 'pre-wrap', maxHeight: '100px', overflowY: 'auto', background: 'rgba(255,255,255,0.02)', padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--glass-border)' }}>
+                                  {file.media_description || file.content || "Aucune description disponible."}
+                                </div>
+                                <button
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(file.media_description || file.content || "");
+                                    setCopiedId(file.id);
+                                    setTimeout(() => setCopiedId(null), 2000);
+                                  }}
+                                  className="glass"
+                                  style={{ 
+                                    display: 'flex', 
+                                    alignItems: 'center', 
+                                    gap: '6px', 
+                                    padding: '8px 12px', 
+                                    background: copiedId === file.id ? 'var(--primary)' : 'rgba(255, 255, 255, 0.05)', 
+                                    color: copiedId === file.id ? 'white' : 'var(--text)', 
+                                    border: 'none', 
+                                    borderRadius: '8px', 
+                                    cursor: 'pointer', 
+                                    fontSize: '12px', 
+                                    fontWeight: '600',
+                                    transition: 'all 0.2s',
+                                    flexShrink: 0
+                                  }}
+                                >
+                                  {copiedId === file.id ? (
+                                    <>
+                                      <Check size={14} />
+                                      <span>Copié !</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Copy size={14} />
+                                      <span>Copier</span>
+                                    </>
+                                  )}
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
                   </tbody>
                 </table>
               </div>

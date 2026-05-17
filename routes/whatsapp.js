@@ -262,13 +262,20 @@ INSTRUCTION : Affiche TOUTES ces informations extraites au client sous forme de 
             await sendWhatsAppMessage(from, replyText);
 
         } else if (type === 'document') {
+            const mimeType = message.document.mime_type;
+            const mediaId = message.document.id;
+            const fileName = message.document.filename;
+            
             let textContent = "";
-            console.log(`[Media] Traitement du document: ${filename} (${mimeType})`);
+            console.log(`[Media] Traitement du document: ${fileName} (${mimeType})`);
 
-            if (mimeType === 'application/pdf') {
+            if (mimeType === 'application/pdf' || (mimeType && mimeType.includes('pdf')) || (fileName && fileName.toLowerCase().endsWith('.pdf'))) {
                 const pdfData = await pdf(buffer);
                 textContent = pdfData.text;
-            } else if (mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || filename.endsWith('.docx')) {
+            } else if (
+                (mimeType && (mimeType.includes('word') || mimeType.includes('docx') || mimeType.includes('officedocument'))) || 
+                (fileName && (fileName.toLowerCase().endsWith('.docx') || fileName.toLowerCase().endsWith('.doc')))
+            ) {
                 const docxResult = await mammoth.extractRawText({ buffer: buffer });
                 textContent = docxResult.value;
             }
@@ -289,7 +296,7 @@ INSTRUCTION : Affiche TOUTES ces informations extraites au client sous forme de 
                 await supabase.from('messages').insert([{
                     conversation_id: conv.id,
                     sender: 'user',
-                    content: `Document reçu: ${filename}`,
+                    content: `Document reçu: ${fileName}`,
                     media_url: url,
                     media_type: mimeType,
                     media_description: summary
