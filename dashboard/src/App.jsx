@@ -46,8 +46,9 @@ function App() {
 
   const getMediaUrl = (urlOrId) => {
     if (!urlOrId) return '';
-    if (urlOrId.startsWith('http://') || urlOrId.startsWith('https://')) return urlOrId;
-    return `https://assuria-production.up.railway.app/api/media/${urlOrId}`;
+    const strUrl = String(urlOrId);
+    if (strUrl.startsWith('http://') || strUrl.startsWith('https://')) return strUrl;
+    return `https://assuria-production.up.railway.app/api/media/${strUrl}`;
   };
 
   const renderMessageContent = (msg) => {
@@ -879,7 +880,12 @@ function App() {
                               })()}
                             </td>
                             <td style={{ padding: '16px 20px', fontSize: '13px', color: 'var(--text-dim)' }}>
-                              {format(new Date(file.created_at), 'd MMM yyyy HH:mm', { locale: fr })}
+                              {file.created_at ? (
+                                (() => {
+                                  try { return format(new Date(file.created_at), 'd MMM yyyy HH:mm', { locale: fr }) }
+                                  catch (e) { return 'Date invalide' }
+                                })()
+                              ) : 'Date inconnue'}
                             </td>
                             <td style={{ padding: '16px 20px' }}>
                               <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', maxWidth: '500px' }}>

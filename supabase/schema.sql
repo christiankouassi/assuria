@@ -4,6 +4,7 @@
 CREATE TABLE IF NOT EXISTS conversations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_identifier TEXT NOT NULL UNIQUE,
+    client_profile JSONB DEFAULT '{}'::jsonb, -- Profil client persistant (nom, immatriculation, etc.)
     last_interaction TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     status TEXT DEFAULT 'active', -- active, archived
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
@@ -65,4 +66,4 @@ ALTER TABLE claims ADD COLUMN IF NOT EXISTS media_urls JSONB DEFAULT '[]';
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS media_url TEXT;
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS media_type TEXT;
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS media_description TEXT;
-
+ALTER TABLE conversations ADD COLUMN IF NOT EXISTS client_profile JSONB DEFAULT '{}'::jsonb;

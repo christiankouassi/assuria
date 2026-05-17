@@ -193,9 +193,16 @@ INSTRUCTION : Affiche TOUTES ces informations extraites au client sous forme de 
                 .select('sender, content')
                 .eq('conversation_id', conv.id)
                 .order('created_at', { ascending: true })
-                .limit(10);
+                .limit(50);
 
-            const aiResult = await getAIResponse(imageContext, history || []);
+            const aiResult = await getAIResponse(imageContext, history || [], conv.client_profile);
+
+            // Mise à jour du profil client si nécessaire
+            if (aiResult.extracted_profile && Object.keys(aiResult.extracted_profile).length > 0) {
+                const updatedProfile = { ...(conv.client_profile || {}), ...aiResult.extracted_profile };
+                await supabase.from('conversations').update({ client_profile: updatedProfile }).eq('id', conv.id);
+                conv.client_profile = updatedProfile;
+            }
 
             // Sauvegarde de la réponse de l'assistant
             await supabase.from('messages').insert([{
@@ -243,9 +250,16 @@ INSTRUCTION : Affiche TOUTES ces informations extraites au client sous forme de 
                 .select('sender, content')
                 .eq('conversation_id', conv.id)
                 .order('created_at', { ascending: true })
-                .limit(10);
+                .limit(50);
 
-            const aiResult = await getAIResponse(transcription, history || []);
+            const aiResult = await getAIResponse(transcription, history || [], conv.client_profile);
+
+            // Mise à jour du profil client si nécessaire
+            if (aiResult.extracted_profile && Object.keys(aiResult.extracted_profile).length > 0) {
+                const updatedProfile = { ...(conv.client_profile || {}), ...aiResult.extracted_profile };
+                await supabase.from('conversations').update({ client_profile: updatedProfile }).eq('id', conv.id);
+                conv.client_profile = updatedProfile;
+            }
 
             // Sauvegarde la réponse AI
             await supabase.from('messages').insert([{
@@ -332,10 +346,17 @@ INSTRUCTION : Affiche TOUTES ces informations extraites au client sous forme de 
             .select('sender, content')
             .eq('conversation_id', conv.id)
             .order('created_at', { ascending: true })
-            .limit(10);
+            .limit(50);
 
         // 4. Get AI Response and Intent
-        const aiResult = await getAIResponse(msgBody, history || []);
+        const aiResult = await getAIResponse(msgBody, history || [], conv.client_profile);
+
+        // Mise à jour du profil client si nécessaire
+        if (aiResult.extracted_profile && Object.keys(aiResult.extracted_profile).length > 0) {
+            const updatedProfile = { ...(conv.client_profile || {}), ...aiResult.extracted_profile };
+            await supabase.from('conversations').update({ client_profile: updatedProfile }).eq('id', conv.id);
+            conv.client_profile = updatedProfile;
+        }
 
         // 5. Save Bot Message
         const { error: aiMsgError } = await supabase.from('messages').insert([
@@ -359,61 +380,77 @@ INSTRUCTION : Affiche TOUTES ces informations extraites au client sous forme de 
 }
 
 async function handleIntent(convId, msgBody, aiResult) {
+    if (!aiResult.intent || aiResult.intent === 'general') return;
+
+    // Récupérer le user_phone
+    const { data: conv } = await supabase.from('conversations').select('user_identifier').eq('id', convId).single();
+    const userPhone = conv?.user_identifier || 'unknown';
+
+    // Déterminer le statut
+    let status = 'pending';
+    if (aiResult.action === 'complete') status = 'submitted';
+    else if (aiResult.action === 'cancel') status = 'cancelled';
+
     if (aiResult.intent === 'claim') {
         console.log(`[Intent] Recherche d'un sinistre en attente...`);
-        const { data: existingClaim } = await supabase
+        const { data: existingClaims } = await supabase
             .from('claims')
-            .select('id, description')
+            .select('id, details')
             .eq('conversation_id', convId)
             .eq('status', 'pending')
-            .maybeSingle();
+            .order('created_at', { ascending: false })
+            .limit(1);
+
+        const existingClaim = existingClaims && existingClaims.length > 0 ? existingClaims[0] : null;
 
         if (existingClaim) {
-            const updatedClaim = {
-                description: aiResult.data.description || msgBody
-            };
-            if (aiResult.data.policy_number) updatedClaim.policy_number = aiResult.data.policy_number;
-            if (aiResult.data.client_name) updatedClaim.client_name = aiResult.data.client_name;
+            const mergedDetails = { ...existingClaim.details, ...aiResult.data };
+            if (!mergedDetails.description && msgBody) mergedDetails.description = msgBody;
+            
+            await supabase.from('claims').update({
+                details: mergedDetails,
+                status: status
+            }).eq('id', existingClaim.id);
+        } else if (status === 'pending') {
+            const details = aiResult.data || {};
+            if (!details.description && msgBody) details.description = msgBody;
 
-            await supabase.from('claims').update(updatedClaim).eq('id', existingClaim.id);
-        } else {
             const newClaim = { 
                 conversation_id: convId, 
-                description: aiResult.data.description || msgBody,
+                user_phone: userPhone,
+                details: details,
                 status: 'pending'
             };
-            if (aiResult.data.policy_number) newClaim.policy_number = aiResult.data.policy_number;
-            if (aiResult.data.client_name) newClaim.client_name = aiResult.data.client_name;
-
             await supabase.from('claims').insert([newClaim]);
         }
     } else if (aiResult.intent === 'quote') {
         console.log(`[Intent] Recherche d'un devis en attente...`);
-        const { data: existingQuote } = await supabase
+        const { data: existingQuotes } = await supabase
             .from('quotes')
             .select('id, details')
             .eq('conversation_id', convId)
             .eq('status', 'pending')
-            .maybeSingle();
+            .order('created_at', { ascending: false })
+            .limit(1);
+
+        const existingQuote = existingQuotes && existingQuotes.length > 0 ? existingQuotes[0] : null;
 
         if (existingQuote) {
             const mergedDetails = { ...existingQuote.details, ...aiResult.data };
             const updatedQuote = {
-                insurance_type: aiResult.data.type || 'auto',
-                details: mergedDetails
+                insurance_type: aiResult.data.insurance_type || aiResult.data.type || 'auto',
+                details: mergedDetails,
+                status: status
             };
-            if (aiResult.data.client_name) updatedQuote.client_name = aiResult.data.client_name;
-
             await supabase.from('quotes').update(updatedQuote).eq('id', existingQuote.id);
-        } else {
+        } else if (status === 'pending') {
             const newQuote = { 
                 conversation_id: convId, 
-                insurance_type: aiResult.data.type || 'auto',
-                details: aiResult.data,
+                user_phone: userPhone,
+                insurance_type: aiResult.data.insurance_type || aiResult.data.type || 'auto',
+                details: aiResult.data || {},
                 status: 'pending'
             };
-            if (aiResult.data.client_name) newQuote.client_name = aiResult.data.client_name;
-
             await supabase.from('quotes').insert([newQuote]);
         }
     }
