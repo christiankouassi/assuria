@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const supabase = require('../services/supabase');
-const { getAIResponse } = require('../services/gemini');
+const { getAIResponse } = require('../services/ai');
 
 // Send message from widget
 router.post('/message', async (req, res) => {

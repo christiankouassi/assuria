@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const axios = require('axios');
 const supabase = require('../services/supabase');
-const { getAIResponse } = require('../services/gemini');
+const { getAIResponse, getAIResponseWithImage } = require('../services/ai');
 const Anthropic = require('@anthropic-ai/sdk');
 const FormData = require('form-data');
 const pdf = require('pdf-parse');
@@ -146,25 +146,10 @@ async function processMessage(body) {
         if (type === 'image') {
             console.log(`[Media] Analyse de l'image par Claude...`);
             const base64Data = buffer.toString('base64');
-            const response = await anthropicClient.messages.create({
-                model: 'claude-haiku-4-5',
-                max_tokens: 1024,
-                messages: [{
-                    role: 'user',
-                    content: [
-                        {
-                            type: 'image',
-                            source: { type: 'base64', media_type: mimeType, data: base64Data }
-                        },
-                        {
-                            type: 'text',
-                            text: 'Analyse cette image dans le contexte de l\'assurance au Maroc. Si c\'est une carte grise, extrais : marque, modèle, année, immatriculation. Si c\'est des dommages sur un véhicule ou bien, décris précisément ce que tu vois. Si c\'est un document d\'assurance, résume son contenu utile.'
-                        }
-                    ]
-                }]
-            });
-            const desc = response.content[0].text;
-            console.log(`[Media] Analyse Claude: ${desc.substring(0, 50)}...`);
+            const analysis = await getAIResponseWithImage(base64Data, mimeType);
+            const desc = analysis.description || 'Photo reçue et analysée.';
+            const extractedType = analysis.extracted_data?.type || 'autre';
+            console.log(`[Media] Analyse Claude Vision: Type=${extractedType}, Desc=${desc.substring(0, 50)}...`);
 
             // Sauvegarde le message utilisateur (l'image)
             const { error: msgErr } = await supabase.from('messages').insert([{
@@ -194,15 +179,38 @@ async function processMessage(body) {
                     .eq('id', pendingClaim.id);
             }
 
-            // Répondre au client
-            await sendWhatsAppMessage(from, `[Photo reçue et analysée] 📸\n\n${desc}`);
+            // Génère une réponse intelligente de l'IA en lui soumettant la description de l'image
+            let aiPrompt = `[Photo reçue] ${desc}`;
+            if (extractedType === 'carte_grise') {
+                aiPrompt = `[Analyse d'image de carte grise] : ${desc}`;
+            } else if (extractedType === 'cni') {
+                aiPrompt = `[Analyse de CNI] : ${desc}`;
+            } else if (extractedType === 'dommages') {
+                aiPrompt = `[Description de dommages sur un véhicule ou bien] : ${desc}`;
+            }
+
+            // Récupère l'historique pour le contexte de l'assistant
+            const { data: history } = await supabase
+                .from('messages')
+                .select('sender, content')
+                .eq('conversation_id', conv.id)
+                .order('created_at', { ascending: true })
+                .limit(10);
+
+            const aiResult = await getAIResponse(aiPrompt, history || []);
 
             // Sauvegarde de la réponse de l'assistant
             await supabase.from('messages').insert([{
                 conversation_id: conv.id,
                 sender: 'ai',
-                content: `Photo analysée : ${desc}`
+                content: aiResult.response
             }]);
+
+            // Gère l'intention
+            await handleIntent(conv.id, aiPrompt, aiResult);
+
+            // Répondre au client
+            await sendWhatsAppMessage(from, aiResult.response);
 
         } else if (type === 'audio') {
             console.log(`[Media] Envoi du vocal à Whisper...`);
