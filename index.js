@@ -9,7 +9,13 @@ const conversationsRoutes = require('./routes/conversations');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(cors());
+app.use(cors({
+  origin: [
+    process.env.DASHBOARD_URL,
+    'http://localhost:5173',
+    'http://localhost:3000'
+  ]
+}));
 app.use(bodyParser.json());
 
 // Routes
