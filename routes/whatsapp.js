@@ -5,7 +5,7 @@ const supabase = require('../services/supabase');
 const { getAIResponse, getAIResponseWithImage } = require('../services/ai');
 const Anthropic = require('@anthropic-ai/sdk');
 const FormData = require('form-data');
-const pdf = require('pdf-parse');
+const pdfParse = require('pdf-parse');
 const mammoth = require('mammoth');
 
 const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN;
@@ -276,7 +276,7 @@ INSTRUCTION : Affiche TOUTES ces informations extraites au client sous forme de 
             console.log(`[Media] Traitement du document: ${fileName} (${mimeType})`);
 
             if (isPDF) {
-                const pdfData = await pdf(buffer);
+                const pdfData = await pdfParse(buffer);
                 textContent = pdfData.text;
             } else if (isWord) {
                 const docxResult = await mammoth.extractRawText({ buffer: buffer });
