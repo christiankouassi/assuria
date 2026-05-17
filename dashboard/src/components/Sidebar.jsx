@@ -22,7 +22,7 @@ function NavItem({ active, onClick, icon, label, badge }) {
 export default function Sidebar({ activeTab, setActiveTab, unreadCounts }) {
   const tabs = [
     { id: 'dashboard', icon: 'dashboard', label: 'Dashboard' },
-    { id: 'messages', icon: 'chat', label: 'Messages', badge: unreadCounts?.messages },
+    { id: 'conversations', icon: 'chat', label: 'Messages', badge: unreadCounts?.messages },
     { id: 'claims', icon: 'report_problem', label: 'Sinistres', badge: unreadCounts?.claims },
     { id: 'quotes', icon: 'request_quote', label: 'Devis', badge: unreadCounts?.quotes },
     { id: 'files', icon: 'folder_open', label: 'Fichiers' },
