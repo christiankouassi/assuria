@@ -10,6 +10,7 @@ import { format, subDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import * as XLSX from 'xlsx';
+import Layout from './components/Layout';
 
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -175,7 +176,7 @@ function App() {
     };
   }, []);
 
-  const handleGlobalNewMessage = (payload) => {
+  function handleGlobalNewMessage(payload) {
     const msg = payload.new;
     if (msg.sender === 'user') {
       if (audioRef.current) {
@@ -237,7 +238,7 @@ function App() {
     scrollToBottom();
   }, [chatMessages]);
 
-  const fetchData = async () => {
+  async function fetchData() {
     const [convs, clms, qts, msgs, filesData] = await Promise.all([
       supabase.from('conversations').select('*, messages(content, created_at, sender, media_type)').order('last_message_at', { ascending: false }),
       supabase.from('claims').select('*, conversations(user_identifier)').order('created_at', { ascending: false }),
@@ -376,276 +377,270 @@ function App() {
   });
 
   return (
-    <div className="dashboard-container">
-      <aside className="sidebar glass">
-        <div className="logo">
-          <ShieldAlert size={32} />
-          <span>Assuria AI</span>
-        </div>
-        
-        <nav>
-          <NavItem 
-            active={activeTab === 'dashboard'} 
-            onClick={() => setActiveTab('dashboard')}
-            icon={<LayoutDashboard size={20} />}
-            label="Tableau de bord"
-          />
-          <NavItem 
-            active={activeTab === 'conversations'} 
-            onClick={() => { setActiveTab('conversations'); setSelectedConversation(null); }}
-            icon={<MessageSquare size={20} />}
-            label="Messages"
-            badge={Object.values(unreadCounts).reduce((a, b) => a + b, 0)}
-          />
-          <NavItem 
-            active={activeTab === 'claims'} 
-            onClick={() => setActiveTab('claims')}
-            icon={<ShieldAlert size={20} />}
-            label="Sinistres"
-          />
-          <NavItem 
-            active={activeTab === 'quotes'} 
-            onClick={() => setActiveTab('quotes')}
-            icon={<FileText size={20} />}
-            label="Devis"
-          />
-          <NavItem 
-            active={activeTab === 'files'} 
-            onClick={() => setActiveTab('files')}
-            icon={<FolderOpen size={20} />}
-            label="Fichiers"
-          />
-          <div style={{ marginTop: 'auto', marginBottom: '10px' }}>
-            <NavItem 
-              active={activeTab === 'help'} 
-              onClick={() => setActiveTab('help')}
-              icon={<HelpCircle size={20} />}
-              label="Aide"
-            />
-          </div>
-        </nav>
-      </aside>
-
-      <main className="main-content">
-        <header className="glass" style={{ padding: '16px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', color: 'var(--text-dim)' }}>
-            <Search size={18} />
-            <span style={{ fontSize: '14px' }}>Espace Conseiller</span>
-          </div>
-          <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
-            <button 
-              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-              style={{ background: 'transparent', border: 'none', color: 'var(--text-dim)', cursor: 'pointer', display: 'flex' }}
-            >
-              {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
-            </button>
-            <div style={{ position: 'relative' }}>
-              <button 
-                onClick={() => setShowNotifications(!showNotifications)}
-                style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-dim)', position: 'relative', display: 'flex', alignItems: 'center', padding: '4px' }}
-              >
-                <Bell size={20} />
-                {notifications.filter(n => !n.read).length > 0 && (
-                  <span style={{ position: 'absolute', top: '0px', right: '0px', background: '#ef4444', color: 'white', fontSize: '9px', fontWeight: 'bold', width: '14px', height: '14px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    {notifications.filter(n => !n.read).length}
-                  </span>
-                )}
-              </button>
-              
-              {showNotifications && (
-                <div className="glass notifications-dropdown" style={{
-                  position: 'absolute',
-                  top: '35px',
-                  right: '0',
-                  width: '320px',
-                  maxHeight: '400px',
-                  overflowY: 'auto',
-                  borderRadius: '12px',
-                  boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
-                  zIndex: 1000,
-                  padding: '12px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '8px',
-                  border: '1px solid var(--glass-border)',
-                  background: 'var(--surface)'
-                }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--glass-border)', paddingBottom: '8px', marginBottom: '4px' }}>
-                    <span style={{ fontWeight: '700', color: 'var(--text)' }}>Notifications</span>
-                    {notifications.length > 0 && (
-                      <button 
-                        onClick={() => setNotifications(prev => prev.map(n => ({ ...n, read: true })))}
-                        style={{ background: 'none', border: 'none', color: 'var(--primary)', fontSize: '11px', cursor: 'pointer', fontWeight: '600' }}
-                      >
-                        Tout marquer lu
-                      </button>
-                    )}
-                  </div>
-                  {notifications.length === 0 ? (
-                    <div style={{ padding: '16px', textAlign: 'center', color: 'var(--text-dim)', fontSize: '13px' }}>
-                      Aucune nouvelle notification
-                    </div>
-                  ) : (
-                    notifications.map(n => (
-                      <div 
-                        key={n.id} 
-                        style={{ 
-                          padding: '10px', 
-                          borderRadius: '8px', 
-                          background: n.read ? 'transparent' : 'rgba(var(--primary-rgb), 0.1)', 
-                          borderLeft: n.read ? 'none' : '3px solid var(--primary)',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: '4px'
-                        }}
-                      >
-                        <span style={{ fontSize: '13px', color: 'var(--text)', fontWeight: n.read ? 'normal' : '600' }}>{n.text}</span>
-                        <span style={{ fontSize: '10px', color: 'var(--text-dim)' }}>
-                          {format(new Date(n.created_at), 'dd/MM HH:mm')}
-                        </span>
-                      </div>
-                    ))
-                  )}
-                </div>
-              )}
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: 'var(--surface)', padding: '6px 12px', borderRadius: '30px' }}>
-              <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}>
-                <User size={18} />
-              </div>
-              <span style={{ fontSize: '14px', fontWeight: '600', color: 'var(--text)' }}>Conseiller</span>
-            </div>
-          </div>
-        </header>
-
-        <div className="content-area" style={{ padding: '24px', height: 'calc(100vh - 80px)', overflowY: 'auto' }}>
+    <Layout
+      theme={theme}
+      toggleTheme={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+      activeTab={activeTab}
+      setActiveTab={setActiveTab}
+      unreadCounts={{ messages: Object.values(unreadCounts).reduce((a, b) => a + b, 0) }}
+      notificationsCount={notifications.filter(n => !n.read).length}
+      toggleNotifications={() => setShowNotifications(!showNotifications)}
+    >
+      <div className="content-area">
           {activeTab === 'dashboard' ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-              <h2 style={{ margin: 0, color: 'var(--text)' }}>Aperçu de l'activité</h2>
-              <div className="stats-grid">
-                <StatCard label="Messages IA (ce mois)" value={thisMonthMessages} />
-                <StatCard label="Devis en cours" value={quoteStats.new} />
-                <StatCard label="Sinistres en cours" value={claimStats.new} />
-                <StatCard label="Temps de réponse moyen" value="< 1 min" subtitle="IA" />
+            <div className="space-y-xl max-w-[1440px] mx-auto">
+              {/* Header Section */}
+              <div className="flex justify-between items-end">
+                <div>
+                  <h2 className="font-headline-lg text-headline-lg text-on-surface m-0">Tableau de bord</h2>
+                  <p className="text-on-surface-variant font-body-md text-body-md mt-xs m-0">
+                    Bienvenue, voici un aperçu de vos performances aujourd'hui.
+                  </p>
+                </div>
+                <div className="flex gap-md">
+                  <button className="px-md py-sm bg-surface-container-high border border-outline-variant/50 rounded-lg text-on-surface font-label-md text-label-md hover:bg-surface-container-highest transition-colors cursor-pointer">
+                    Exporter Rapport
+                  </button>
+                  <button className="px-md py-sm bg-primary text-on-primary rounded-lg font-label-md text-label-md hover:opacity-90 transition-opacity cursor-pointer border-none font-bold">
+                    Vue Analyste AI
+                  </button>
+                </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '24px' }}>
-                <div className="glass" style={{ padding: '24px', borderRadius: '16px' }}>
-                  <h3 style={{ marginTop: 0, marginBottom: '20px', color: 'var(--text)' }}>Activité des 7 derniers jours</h3>
-                  <div style={{ height: '300px' }}>
+              {/* Top Metrics Grid */}
+              <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-gutter">
+                <div className="glass-card p-md rounded-xl flex flex-col justify-between h-32 relative overflow-hidden">
+                  <div className="flex justify-between items-start">
+                    <span className="text-on-surface-variant font-label-md text-label-md">Messages IA ce mois</span>
+                    <span className="material-symbols-outlined text-primary" style={{ fontVariationSettings: "'FILL' 1" }}>auto_awesome</span>
+                  </div>
+                  <div>
+                    <div className="text-display-lg font-display-lg leading-none">{thisMonthMessages}</div>
+                    <div className="text-primary text-body-sm font-body-sm mt-xs flex items-center gap-xs">
+                      <span className="material-symbols-outlined text-[16px]">trending_up</span> Actif
+                    </div>
+                  </div>
+                </div>
+
+                <div className="glass-card p-md rounded-xl flex flex-col justify-between h-32">
+                  <div className="flex justify-between items-start">
+                    <span className="text-on-surface-variant font-label-md text-label-md">Devis en cours</span>
+                    <span className="material-symbols-outlined text-secondary">request_quote</span>
+                  </div>
+                  <div>
+                    <div className="text-display-lg font-display-lg leading-none">{quoteStats.new}</div>
+                    <div className="text-on-surface-variant text-body-sm font-body-sm mt-xs">Total: {quoteStats.total}</div>
+                  </div>
+                </div>
+
+                <div className="glass-card p-md rounded-xl flex flex-col justify-between h-32">
+                  <div className="flex justify-between items-start">
+                    <span className="text-on-surface-variant font-label-md text-label-md">Sinistres en cours</span>
+                    <span className="material-symbols-outlined text-tertiary">report_problem</span>
+                  </div>
+                  <div>
+                    <div className="text-display-lg font-display-lg leading-none">{claimStats.new}</div>
+                    <div className="text-on-surface-variant text-body-sm font-body-sm mt-xs">Total: {claimStats.total}</div>
+                  </div>
+                </div>
+
+                <div className="glass-card p-md rounded-xl flex flex-col justify-between h-32">
+                  <div className="flex justify-between items-start">
+                    <span className="text-on-surface-variant font-label-md text-label-md">Temps de réponse</span>
+                    <span className="material-symbols-outlined text-primary">speed</span>
+                  </div>
+                  <div>
+                    <div className="text-display-lg font-display-lg leading-none">&lt; 1 min</div>
+                    <div className="text-primary text-body-sm font-body-sm mt-xs flex items-center gap-xs">
+                      Optimisé par IA
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              {/* Middle Section: Bento Grid */}
+              <div className="grid grid-cols-12 gap-gutter">
+                {/* Bar Chart: Conversations par jour */}
+                <div className="col-span-12 lg:col-span-8 glass-card rounded-xl p-lg h-[400px] flex flex-col">
+                  <div className="flex justify-between items-center mb-xl">
+                    <h3 className="font-headline-md text-headline-md m-0">Conversations par jour</h3>
+                    <div className="flex items-center gap-md">
+                      <span className="flex items-center gap-xs text-label-md font-label-md text-on-surface-variant">
+                        <span className="w-3 h-3 bg-primary rounded-full"></span> IA
+                      </span>
+                      <span className="flex items-center gap-xs text-label-md font-label-md text-on-surface-variant">
+                        <span className="w-3 h-3 bg-secondary rounded-full"></span> Utilisateur
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex-grow w-full h-full relative min-h-0">
                     <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={chartData}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="var(--glass-border)" vertical={false} />
-                        <XAxis dataKey="name" stroke="var(--text-dim)" fontSize={12} tickLine={false} axisLine={false} />
-                        <YAxis stroke="var(--text-dim)" fontSize={12} tickLine={false} axisLine={false} />
+                      <BarChart data={chartData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="var(--outline-variant)" vertical={false} opacity={0.3} />
+                        <XAxis dataKey="name" stroke="var(--on-surface-variant)" fontSize={12} tickLine={false} axisLine={false} />
+                        <YAxis stroke="var(--on-surface-variant)" fontSize={12} tickLine={false} axisLine={false} />
                         <Tooltip 
-                          contentStyle={{ background: 'var(--bg)', border: '1px solid var(--glass-border)', borderRadius: '8px', color: 'var(--text)' }}
-                          itemStyle={{ color: 'var(--text)' }}
+                          contentStyle={{ background: 'var(--surface-container-high)', border: '1px solid var(--outline-variant)', borderRadius: '8px', color: 'var(--on-surface)' }}
+                          itemStyle={{ color: 'var(--on-surface)' }}
+                          cursor={{ fill: 'rgba(255,255,255,0.05)' }}
                         />
-                        <Bar dataKey="IA" fill="var(--primary)" radius={[4, 4, 0, 0]} />
-                        <Bar dataKey="Utilisateur" fill="var(--accent)" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="IA" fill="var(--primary)" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                        <Bar dataKey="Utilisateur" fill="var(--secondary)" radius={[4, 4, 0, 0]} maxBarSize={40} />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
                 </div>
 
-                <div className="glass" style={{ padding: '24px', borderRadius: '16px', display: 'flex', flexDirection: 'column' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
-                    <AlertCircle color="#ef4444" size={24} />
-                    <h3 style={{ margin: 0, color: 'var(--text)' }}>Conversations urgentes</h3>
+                {/* Urgent Conversations */}
+                <div className="col-span-12 lg:col-span-4 glass-card rounded-xl p-lg flex flex-col h-[400px]">
+                  <div className="flex items-center gap-sm mb-lg">
+                    <span className="material-symbols-outlined text-error">emergency</span>
+                    <h3 className="font-headline-md text-headline-md m-0">Urgences</h3>
                   </div>
-                  {urgentConversations.length > 0 ? (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', overflowY: 'auto', flex: 1 }}>
-                      {urgentConversations.map(conv => (
-                        <div key={conv.id} style={{ background: 'var(--surface)', padding: '12px', borderRadius: '8px', borderLeft: '4px solid #ef4444' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                            <span style={{ fontWeight: '600', color: 'var(--text)' }}>+{conv.user_identifier}</span>
-                            <span style={{ fontSize: '12px', color: '#ef4444' }}>
-                              {format(new Date(conv.last_message.created_at), 'HH:mm')}
-                            </span>
+                  <div className="flex-grow space-y-md overflow-y-auto pr-xs custom-scrollbar">
+                    {urgentConversations.length > 0 ? (
+                      urgentConversations.map(conv => (
+                        <div key={conv.id} onClick={() => { setActiveTab('conversations'); handleSelectConversation(conv); }} className="p-md rounded-lg border border-error/20 bg-error/5 flex justify-between items-center group cursor-pointer hover:bg-error/10 transition-colors">
+                          <div className="flex items-center gap-md">
+                            <div className="w-10 h-10 rounded-full bg-surface-container-high flex items-center justify-center text-primary font-bold">
+                              {conv.user_identifier.substring(0, 2).toUpperCase()}
+                            </div>
+                            <div className="overflow-hidden">
+                              <p className="font-body-md text-body-md text-on-surface m-0">+{conv.user_identifier}</p>
+                              <p className="text-body-sm text-on-surface-variant m-0 truncate w-32">{formatLastMessagePreview(conv.last_message)}</p>
+                            </div>
                           </div>
-                          <p style={{ margin: 0, fontSize: '13px', color: 'var(--text-dim)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            {formatLastMessagePreview(conv.last_message)}
-                          </p>
+                          <div className="text-right flex-shrink-0">
+                            <p className="text-error font-bold text-body-md m-0">{format(new Date(conv.last_message.created_at), 'HH:mm')}</p>
+                            <p className="text-[10px] uppercase tracking-wider text-error/60 m-0">En attente</p>
+                          </div>
                         </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-dim)', textAlign: 'center' }}>
-                      Aucune conversation en attente de plus de 30 minutes.
-                    </div>
-                  )}
+                      ))
+                    ) : (
+                      <div className="h-full flex flex-col items-center justify-center text-on-surface-variant text-center opacity-70">
+                        <span className="material-symbols-outlined text-4xl mb-sm">check_circle</span>
+                        <p className="m-0 text-body-md">Aucune conversation<br/>urgente en attente.</p>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
-          ) : activeTab === 'conversations' ? (
-            <div className="chat-layout" style={{ height: '100%', marginTop: '-24px', marginLeft: '-24px', marginRight: '-24px' }}>
-              <div className="chat-list" style={{ overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '10px', padding: '24px' }}>
-                {data.conversations.map(conv => (
-                  <div 
-                    key={conv.id} 
-                    className={`glass ${selectedConversation?.id === conv.id ? 'active-chat' : ''}`}
-                    style={{ padding: '16px', cursor: 'pointer', borderLeft: selectedConversation?.id === conv.id ? '4px solid var(--primary)' : '1px solid transparent', position: 'relative' }}
-                    onClick={() => handleSelectConversation(conv)}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                      <span style={{ fontWeight: '700', color: 'var(--text)' }}>+{conv.user_identifier}</span>
-                      <span style={{ fontSize: '12px', color: 'var(--text-dim)' }}>
-                        {conv.last_message ? format(new Date(conv.last_message.created_at), 'HH:mm') : ''}
-                      </span>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <p style={{ margin: 0, fontSize: '13px', color: 'var(--text-dim)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '80%' }}>
-                        {formatLastMessagePreview(conv.last_message)}
-                      </p>
-                      {unreadCounts[conv.id] > 0 && (
-                        <div style={{ background: '#ef4444', color: 'white', fontSize: '10px', fontWeight: 'bold', width: '20px', height: '20px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          {unreadCounts[conv.id]}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="chat-detail glass" style={{ borderTop: 'none', borderBottom: 'none', borderRight: 'none', borderRadius: 0 }}>
-                {selectedConversation ? (
-                  <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-                    <div className="chat-header" style={{ padding: '16px 24px', borderBottom: '1px solid var(--glass-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div>
-                        <h3 style={{ fontSize: '18px', margin: 0, color: 'var(--text)' }}>+{selectedConversation.user_identifier}</h3>
-                        <p style={{ fontSize: '12px', color: 'var(--text-dim)', margin: 0 }}>ID: {selectedConversation.id.slice(0,8)}</p>
-                      </div>
-                      
-                      <div className="switch-container">
-                        <Cpu size={16} color={aiMode ? 'var(--primary)' : 'var(--text-dim)'} />
-                        <label className="switch">
-                          <input type="checkbox" checked={!aiMode} onChange={() => setAiMode(!aiMode)} />
-                          <span className="slider"></span>
-                        </label>
-                        <UserCheck size={16} color={!aiMode ? 'var(--primary)' : 'var(--text-dim)'} />
-                        <span style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text)' }}>{aiMode ? 'MODE IA' : 'MODE CONSEILLER'}</span>
-                      </div>
-                    </div>
-
-                    <div className="messages-container" style={{ flex: 1, padding: '24px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                      {chatMessages.map(msg => (
-                        <div key={msg.id} style={{ display: 'flex', flexDirection: 'column', alignItems: msg.sender === 'user' ? 'flex-end' : 'flex-start' }}>
-                          <div 
-                            className={`message-bubble ${msg.sender === 'user' ? 'message-user' : 'message-ai'}`} 
-                            style={{ 
-                              marginBottom: '4px', 
-                              padding: msg.media_type && msg.media_type.includes('image') ? '4px' : '10px 14px', 
-                              borderRadius: '16px', 
-                              maxWidth: '70%', 
-                              display: 'flex', 
-                              flexDirection: 'column', 
-                              gap: '6px' 
-                            }}
-                          >
-                            {renderMessageContent(msg)}
+                    ) : activeTab === 'conversations' ? (
+            <div className="flex flex-1 overflow-hidden h-full">
+              {/* Panel 1: Conversation List */}
+              <section className="w-80 flex flex-col border-r border-outline-variant bg-surface-container-lowest">
+                <div className="p-md border-b border-outline-variant flex justify-between items-center">
+                  <h2 className="font-headline-md text-[18px] text-on-surface">Conversations</h2>
+                  <span className="bg-primary/10 text-primary px-2 py-0.5 rounded-full text-[10px] font-bold">
+                    {data.conversations.length} ACTIVES
+                  </span>
+                </div>
+                <div className="flex-1 overflow-y-auto custom-scrollbar">
+                  {data.conversations.map(conv => (
+                    <div 
+                      key={conv.id} 
+                      className={`p-md border-b border-outline-variant transition-colors cursor-pointer group ${selectedConversation?.id === conv.id ? 'bg-surface-container-high border-l-4 border-l-primary' : 'hover:bg-surface-container-low'}`}
+                      onClick={() => handleSelectConversation(conv)}
+                    >
+                      <div className="flex gap-3">
+                        <div className="relative flex-shrink-0">
+                          <div className="w-12 h-12 rounded-full bg-surface-container-highest flex items-center justify-center text-on-surface font-bold text-lg">
+                            {conv.user_identifier.substring(0, 2).toUpperCase()}
                           </div>
-                          <span style={{ fontSize: '11px', color: 'var(--text-dim)', padding: '0 4px' }}>
+                          <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-[#25D366] rounded-full border-2 border-surface-container-lowest flex items-center justify-center">
+                            <img alt="WhatsApp Icon" className="w-3 h-3" src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" />
+                          </div>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex justify-between items-start mb-1">
+                            <h3 className={`font-bold truncate ${selectedConversation?.id === conv.id ? 'text-on-surface' : 'text-on-surface-variant group-hover:text-on-surface'}`}>
+                              +{conv.user_identifier}
+                            </h3>
+                            <span className="text-[10px] text-on-surface-variant font-medium">
+                              {conv.last_message ? format(new Date(conv.last_message.created_at), 'HH:mm') : ''}
+                            </span>
+                          </div>
+                          <p className={`text-body-sm truncate ${selectedConversation?.id === conv.id ? 'text-primary font-medium' : 'text-on-surface-variant'}`}>
+                            {formatLastMessagePreview(conv.last_message)}
+                          </p>
+                          {unreadCounts[conv.id] > 0 && (
+                            <div className="flex items-center gap-2 mt-2">
+                              <span className="w-2.5 h-2.5 bg-error rounded-full"></span>
+                              <span className="text-[10px] text-error uppercase font-bold tracking-tight">
+                                {unreadCounts[conv.id]} Non lus
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              {/* Panel 2: Chat Interface */}
+              <section className="flex-1 flex flex-col bg-surface-container-lowest relative min-w-0">
+                {selectedConversation ? (
+                  <>
+                    {/* Chat Header */}
+                    <div className="h-16 px-lg border-b border-outline-variant flex items-center justify-between glass-panel z-10">
+                      <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 rounded-full bg-surface-container-highest flex items-center justify-center text-on-surface font-bold text-lg">
+                          {selectedConversation.user_identifier.substring(0, 2).toUpperCase()}
+                        </div>
+                        <div>
+                          <h2 className="font-bold text-on-surface leading-tight">+{selectedConversation.user_identifier}</h2>
+                          <p className="text-[12px] text-primary flex items-center gap-1.5">
+                            <span className="w-2 h-2 bg-primary rounded-full animate-pulse"></span>
+                            Client en ligne via WhatsApp
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center bg-surface-container-high rounded-full p-1 border border-outline-variant">
+                        <button 
+                          className={`flex items-center gap-2 px-4 py-1.5 rounded-full font-bold text-body-sm transition-all ${aiMode ? 'bg-primary text-on-primary-container shadow-sm' : 'text-on-surface-variant hover:text-on-surface'}`}
+                          onClick={() => setAiMode(true)}
+                        >
+                          <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: aiMode ? "'FILL' 1" : "'FILL' 0" }}>smart_toy</span>
+                          Mode IA
+                        </button>
+                        <button 
+                          className={`flex items-center gap-2 px-4 py-1.5 rounded-full font-bold text-body-sm transition-all ${!aiMode ? 'bg-primary text-on-primary-container shadow-sm' : 'text-on-surface-variant hover:text-on-surface'}`}
+                          onClick={() => setAiMode(false)}
+                        >
+                          <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: !aiMode ? "'FILL' 1" : "'FILL' 0" }}>person</span>
+                          Conseiller
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Chat Body */}
+                    <div className="flex-1 overflow-y-auto p-lg flex flex-col gap-6 custom-scrollbar" id="chat-messages">
+                      {chatMessages.map(msg => (
+                        <div key={msg.id} className={`flex flex-col ${msg.sender === 'user' ? 'items-start self-start' : 'items-end self-end'} max-w-[80%]`}>
+                          <div className={`p-md rounded-2xl relative shadow-xl overflow-hidden border ${msg.sender === 'user' ? 'bg-surface-container text-on-surface rounded-tl-none border-outline-variant' : (msg.is_ai ? 'ai-message text-on-surface rounded-tr-none border-transparent' : 'bg-secondary-container text-on-secondary-container rounded-tr-none border-outline-variant/30')}`}>
+                            
+                            {msg.sender !== 'user' && msg.is_ai && (
+                              <div className="absolute top-0 right-0 w-16 h-16 bg-primary/10 blur-2xl rounded-full"></div>
+                            )}
+
+                            {msg.sender !== 'user' && (
+                              <div className={`flex items-center gap-2 mb-2 ${msg.is_ai ? 'text-primary' : 'text-secondary'}`}>
+                                <span className="material-symbols-outlined text-[16px]" style={{ fontVariationSettings: msg.is_ai ? "'FILL' 1" : "'FILL' 0" }}>
+                                  {msg.is_ai ? 'smart_toy' : 'person'}
+                                </span>
+                                <span className="text-[10px] font-bold uppercase tracking-widest relative z-10">
+                                  {msg.is_ai ? 'Assuria AI' : 'Conseiller'}
+                                </span>
+                              </div>
+                            )}
+
+                            <div className="text-body-md relative z-10">
+                              {renderMessageContent(msg)}
+                            </div>
+                          </div>
+                          <span className={`text-[10px] text-on-surface-variant mt-1 font-medium ${msg.sender === 'user' ? 'ml-1 text-left' : 'mr-1 text-right'}`}>
                             {format(new Date(msg.created_at), 'HH:mm')}
                           </span>
                         </div>
@@ -653,322 +648,404 @@ function App() {
                       <div ref={messagesEndRef} />
                     </div>
 
-                    <form className="chat-input-area" onSubmit={handleSendMessage} style={{ padding: '24px', borderTop: '1px solid var(--glass-border)', display: 'flex', gap: '12px' }}>
-                      <input 
-                        type="text" 
-                        className="chat-input"
-                        placeholder={aiMode ? "Désactivé en mode IA" : "Écrire un message..."}
-                        disabled={aiMode}
-                        value={newMessage}
-                        onChange={(e) => setNewMessage(e.target.value)}
-                      />
-                      <button 
-                        type="submit" 
-                        className="glass" 
-                        style={{ padding: '0 20px', background: aiMode ? 'var(--surface)' : 'var(--primary)', border: 'none', borderRadius: '12px', color: aiMode ? 'var(--text-dim)' : 'white', cursor: aiMode ? 'not-allowed' : 'pointer' }}
-                        disabled={aiMode}
+                    {/* Chat Footer: Input */}
+                    <div className="p-lg glass-panel">
+                      <form 
+                        className="bg-surface-container-high rounded-2xl border border-outline-variant p-2 flex items-end gap-2 focus-within:ring-2 focus-within:ring-primary/50 transition-all"
+                        onSubmit={handleSendMessage}
                       >
-                        <Send size={18} />
-                      </button>
-                    </form>
-                  </div>
+                        <button type="button" className="p-2 text-on-surface-variant hover:text-primary transition-colors">
+                          <span className="material-symbols-outlined">add</span>
+                        </button>
+                        <textarea 
+                          className="flex-1 bg-transparent border-none focus:ring-0 text-body-md py-2 resize-none max-h-32 custom-scrollbar text-on-surface placeholder:text-on-surface-variant focus:outline-none disabled:opacity-50"
+                          placeholder={aiMode ? "Désactivé en mode IA" : "Votre réponse..."}
+                          rows="1"
+                          disabled={aiMode}
+                          value={newMessage}
+                          onChange={(e) => setNewMessage(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !e.shiftKey) {
+                              e.preventDefault();
+                              if(newMessage.trim()) handleSendMessage(e);
+                            }
+                          }}
+                        ></textarea>
+                        <button 
+                          type="submit" 
+                          disabled={aiMode || !newMessage.trim()}
+                          className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-lg transition-all ${aiMode || !newMessage.trim() ? 'bg-surface-container text-on-surface-variant opacity-50 cursor-not-allowed' : 'bg-primary text-on-primary-container hover:scale-105 active:scale-95'}`}
+                        >
+                          <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>send</span>
+                        </button>
+                      </form>
+                    </div>
+                  </>
                 ) : (
-                  <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-dim)' }}>
-                    Sélectionnez une conversation pour voir les messages
+                  <div className="flex-1 flex flex-col items-center justify-center text-on-surface-variant">
+                    <span className="material-symbols-outlined text-[64px] mb-4 opacity-50 text-primary">chat</span>
+                    <p className="font-headline-md text-headline-md m-0">Sélectionnez une conversation</p>
+                    <p className="text-body-md mt-2 opacity-70">Choisissez un client dans la liste pour démarrer.</p>
                   </div>
                 )}
-              </div>
+              </section>
+
+              {/* Panel 3: Client Info Card */}
+              {selectedConversation && (
+                <section className="w-80 border-l border-outline-variant bg-surface flex flex-col p-lg custom-scrollbar overflow-y-auto">
+                  <div className="flex flex-col items-center mb-lg">
+                    <div className="relative mb-4">
+                      <div className="w-24 h-24 rounded-full border-4 border-surface-container-high bg-surface-container-highest flex items-center justify-center text-[36px] text-on-surface font-bold">
+                        {selectedConversation.user_identifier.substring(0, 2).toUpperCase()}
+                      </div>
+                      <div className="absolute bottom-1 right-1 w-6 h-6 bg-[#25D366] rounded-full border-2 border-surface flex items-center justify-center">
+                        <img alt="WhatsApp" className="w-4 h-4" src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" />
+                      </div>
+                    </div>
+                    <h3 className="font-headline-md text-on-surface text-center">+{selectedConversation.user_identifier}</h3>
+                    <p className="text-body-sm text-on-surface-variant">ID: {selectedConversation.id.slice(0,8)}</p>
+                  </div>
+
+                  <div className="space-y-6">
+                    {/* Client Details */}
+                    <div className="space-y-4">
+                      <h4 className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">Informations</h4>
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-3">
+                          <span className="material-symbols-outlined text-on-surface-variant text-[20px]">call</span>
+                          <span className="text-body-sm">+{selectedConversation.user_identifier}</span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className="material-symbols-outlined text-on-surface-variant text-[20px]">calendar_today</span>
+                          <span className="text-body-sm">Inscrit le {format(new Date(selectedConversation.created_at), 'dd/MM/yyyy')}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Quick Actions */}
+                    <div className="space-y-3">
+                      <h4 className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">Actions Rapides</h4>
+                      <button className="w-full py-2.5 px-4 rounded-xl border border-outline-variant text-body-sm font-bold hover:bg-surface-container-high transition-colors text-left flex items-center gap-3 text-on-surface">
+                        <span className="material-symbols-outlined text-[20px]">visibility</span>
+                        Voir les dossiers
+                      </button>
+                      <button className="w-full py-2.5 px-4 rounded-xl border border-outline-variant text-body-sm font-bold hover:bg-surface-container-high transition-colors text-left flex items-center gap-3 text-on-surface">
+                        <span className="material-symbols-outlined text-[20px]">receipt_long</span>
+                        Envoyer un document
+                      </button>
+                      <button className="w-full py-2.5 px-4 rounded-xl border border-error/20 text-error text-body-sm font-bold hover:bg-error/5 transition-colors text-left flex items-center gap-3">
+                        <span className="material-symbols-outlined text-[20px]">block</span>
+                        Fermer la session
+                      </button>
+                    </div>
+
+                    {/* AI Insights Mini-Card */}
+                    {Object.keys(clientContext).length > 0 && (
+                      <div className="p-md rounded-2xl ai-message mt-4 shadow-md border border-primary/20">
+                        <div className="flex items-center gap-2 mb-3">
+                          <span className="material-symbols-outlined text-primary text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>analytics</span>
+                          <span className="text-[10px] font-bold text-primary uppercase">Mémoire IA (Contexte)</span>
+                        </div>
+                        <div className="text-[12px] text-on-surface leading-relaxed space-y-2">
+                          {Object.entries(clientContext).map(([key, value]) => (
+                            <div key={key}>
+                              <span className="text-on-surface-variant capitalize">{key}:</span> <span className="font-bold">{typeof value === 'object' ? JSON.stringify(value) : value}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </section>
+              )}
             </div>
+
           ) : activeTab === 'claims' ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <h2 style={{ margin: 0, color: 'var(--text)' }}>Gestion des Sinistres</h2>
-                <button onClick={exportClaims} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 16px', background: 'var(--primary)', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '600' }}>
-                  <Download size={18} />
+            <div className="flex flex-col gap-6 p-lg h-full overflow-y-auto custom-scrollbar">
+              <div className="flex justify-between items-center">
+                <h2 className="font-headline-md text-[24px] text-on-surface m-0">Gestion des Sinistres</h2>
+                <button onClick={exportClaims} className="flex items-center gap-2 px-4 py-2 bg-primary text-on-primary-container rounded-xl font-bold hover:scale-105 active:scale-95 transition-all shadow-md">
+                  <span className="material-symbols-outlined text-[18px]">download</span>
                   Exporter (Excel)
                 </button>
               </div>
-              <div className="stats-grid">
-                <StatCard label="Total Sinistres" value={claimStats.total} />
-                <StatCard label="Nouveaux" value={claimStats.new} />
-                <StatCard label="En cours" value={claimStats.processing} />
-                <StatCard label="Clôturés" value={claimStats.resolved} />
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <StatCard label="Total Sinistres" value={claimStats.total} icon="description" />
+                <StatCard label="Nouveaux" value={claimStats.new} icon="fiber_new" color="text-primary" />
+                <StatCard label="En cours" value={claimStats.processing} icon="hourglass_empty" color="text-[#FFC107]" />
+                <StatCard label="Clôturés" value={claimStats.resolved} icon="check_circle" color="text-error" />
               </div>
-              <div className="glass" style={{ padding: '10px', borderRadius: '12px' }}>
-                <table className="data-table" style={{ width: '100%', borderCollapse: 'collapse', color: 'var(--text)' }}>
-                  <thead>
-                    <tr style={{ textAlign: 'left', color: 'var(--text-dim)' }}>
-                      <th style={{ padding: '16px 20px', fontWeight: '500' }}>Référence</th>
-                      <th style={{ padding: '16px 20px', fontWeight: '500' }}>Client</th>
-                      <th style={{ padding: '16px 20px', fontWeight: '500' }}>Statut</th>
-                      <th style={{ padding: '16px 20px', fontWeight: '500' }}>Description</th>
-                      <th style={{ padding: '16px 20px', fontWeight: '500' }}>Date</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.claims.map(claim => (
-                      <tr key={claim.id} style={{ borderBottom: '1px solid var(--glass-border)' }}>
-                        <td style={{ fontWeight: '600' }}>#{claim.id.slice(0, 8)}</td>
-                        <td>+{claim.conversations?.user_identifier}</td>
-                        <td><span className={`status-badge status-${claim.status}`}>{claim.status}</span></td>
-                        <td style={{ fontSize: '14px', maxWidth: '350px' }}>
-                          <div style={{ marginBottom: claim.media_urls?.length ? '8px' : '0' }}>
-                            {claim.description || "Détails non fournis"}
-                          </div>
-                          {claim.media_urls && claim.media_urls.length > 0 && (
-                            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                              {claim.media_urls.map((media, idx) => (
-                                media.url && (
-                                  <div key={idx} style={{ position: 'relative' }}>
-                                    {media.type?.startsWith('audio/') ? (
-                                      <audio src={media.url} controls style={{ width: '120px', scale: '0.8' }} />
-                                    ) : media.type?.startsWith('image/') || !media.type ? (
-                                      <img 
-                                        src={media.url}
-                                        alt={media.description || "Media"}
-                                        style={{ width: '48px', height: '48px', borderRadius: '6px', objectFit: 'cover', cursor: 'pointer', border: '1px solid var(--glass-border)', boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }}
-                                        onClick={() => setLightboxMedia(media)}
-                                      />
-                                    ) : (
-                                      <a href={media.url} target="_blank" rel="noreferrer" className="glass" style={{ fontSize: '11px', padding: '4px 8px', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '4px', textDecoration: 'none', color: 'var(--text)' }}>
-                                        Doc
-                                      </a>
-                                    )}
-                                  </div>
-                                )
-                              ))}
-                            </div>
-                          )}
-                        </td>
-                        <td>{format(new Date(claim.created_at), 'd MMM yyyy', { locale: fr })}</td>
+
+              <div className="glass-panel p-md">
+                <div className="overflow-x-auto rounded-xl border border-outline-variant bg-surface-container-low/50">
+                  <table className="w-full text-left text-body-md text-on-surface">
+                    <thead className="bg-surface-container border-b border-outline-variant text-on-surface-variant font-bold">
+                      <tr>
+                        <th className="px-6 py-4 font-medium">Référence</th>
+                        <th className="px-6 py-4 font-medium">Client</th>
+                        <th className="px-6 py-4 font-medium">Statut</th>
+                        <th className="px-6 py-4 font-medium">Description</th>
+                        <th className="px-6 py-4 font-medium">Date</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="divide-y divide-outline-variant">
+                      {data.claims.map(claim => (
+                        <tr key={claim.id} className="hover:bg-surface-container-high transition-colors">
+                          <td className="px-6 py-4 font-bold">#{claim.id.slice(0, 8)}</td>
+                          <td className="px-6 py-4">+{claim.conversations?.user_identifier}</td>
+                          <td className="px-6 py-4">
+                            <span className={`px-3 py-1 rounded-full text-[12px] font-bold tracking-wide ${claim.status === 'resolved' ? 'bg-error/20 text-error border border-error/30' : claim.status === 'processing' ? 'bg-[#FFC107]/20 text-[#FFC107] border border-[#FFC107]/30' : 'bg-primary/20 text-primary border border-primary/30'}`}>
+                              {claim.status}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-[14px] max-w-[350px]">
+                            <div className={claim.media_urls?.length ? 'mb-2' : ''}>
+                              {claim.description || "Détails non fournis"}
+                            </div>
+                            {claim.media_urls && claim.media_urls.length > 0 && (
+                              <div className="flex gap-2 flex-wrap">
+                                {claim.media_urls.map((media, idx) => (
+                                  media.url && (
+                                    <div key={idx} className="relative">
+                                      {media.type?.startsWith('audio/') ? (
+                                        <audio src={media.url} controls className="w-32 scale-75 origin-left" />
+                                      ) : media.type?.startsWith('image/') || !media.type ? (
+                                        <img 
+                                          src={media.url}
+                                          alt={media.description || "Media"}
+                                          className="w-12 h-12 rounded-lg object-cover cursor-pointer border border-outline-variant shadow-md"
+                                          onClick={() => setLightboxMedia(media)}
+                                        />
+                                      ) : (
+                                        <a href={media.url} target="_blank" rel="noreferrer" className="glass-panel text-[11px] px-2 py-1 rounded flex items-center gap-1 no-underline text-on-surface hover:text-primary transition-colors">
+                                          Doc
+                                        </a>
+                                      )}
+                                    </div>
+                                  )
+                                ))}
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 text-on-surface-variant text-sm">
+                            {format(new Date(claim.created_at), 'd MMM yyyy', { locale: fr })}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           ) : activeTab === 'quotes' ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <h2 style={{ margin: 0, color: 'var(--text)' }}>Gestion des Devis</h2>
-                <button onClick={exportQuotes} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 16px', background: 'var(--primary)', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '600' }}>
-                  <Download size={18} />
+            <div className="flex flex-col gap-6 p-lg h-full overflow-y-auto custom-scrollbar">
+              <div className="flex justify-between items-center">
+                <h2 className="font-headline-md text-[24px] text-on-surface m-0">Gestion des Devis</h2>
+                <button onClick={exportQuotes} className="flex items-center gap-2 px-4 py-2 bg-primary text-on-primary-container rounded-xl font-bold hover:scale-105 active:scale-95 transition-all shadow-md">
+                  <span className="material-symbols-outlined text-[18px]">download</span>
                   Exporter (Excel)
                 </button>
               </div>
-              <div className="stats-grid">
-                <StatCard label="Total Devis" value={quoteStats.total} />
-                <StatCard label="Nouveaux" value={quoteStats.new} />
-                <StatCard label="Envoyés" value={quoteStats.sent} />
-                <StatCard label="Acceptés" value={quoteStats.accepted} />
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <StatCard label="Total Devis" value={quoteStats.total} icon="request_quote" />
+                <StatCard label="Nouveaux" value={quoteStats.new} icon="fiber_new" color="text-primary" />
+                <StatCard label="Envoyés" value={quoteStats.sent} icon="send" color="text-[#FFC107]" />
+                <StatCard label="Acceptés" value={quoteStats.accepted} icon="thumb_up" color="text-error" />
               </div>
-              <div className="glass" style={{ padding: '10px', borderRadius: '12px' }}>
-                <table className="data-table" style={{ width: '100%', borderCollapse: 'collapse', color: 'var(--text)' }}>
-                  <thead>
-                    <tr style={{ textAlign: 'left', color: 'var(--text-dim)' }}>
-                      <th style={{ padding: '16px 20px', fontWeight: '500' }}>Référence</th>
-                      <th style={{ padding: '16px 20px', fontWeight: '500' }}>Client</th>
-                      <th style={{ padding: '16px 20px', fontWeight: '500' }}>Type</th>
-                      <th style={{ padding: '16px 20px', fontWeight: '500' }}>Statut</th>
-                      <th style={{ padding: '16px 20px', fontWeight: '500' }}>Date</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.quotes.map(quote => (
-                      <tr key={quote.id} style={{ borderBottom: '1px solid var(--glass-border)' }}>
-                        <td style={{ fontWeight: '600' }}>#{quote.id.slice(0, 8)}</td>
-                        <td>+{quote.conversations?.user_identifier}</td>
-                        <td>{quote.insurance_type?.toUpperCase()}</td>
-                        <td><span className={`status-badge status-${quote.status === 'sent' ? 'validated' : 'pending'}`}>{quote.status}</span></td>
-                        <td>{format(new Date(quote.created_at), 'd MMM yyyy', { locale: fr })}</td>
+              <div className="glass-panel p-md">
+                <div className="overflow-x-auto rounded-xl border border-outline-variant bg-surface-container-low/50">
+                  <table className="w-full text-left text-body-md text-on-surface">
+                    <thead className="bg-surface-container border-b border-outline-variant text-on-surface-variant font-bold">
+                      <tr>
+                        <th className="px-6 py-4 font-medium">Référence</th>
+                        <th className="px-6 py-4 font-medium">Client</th>
+                        <th className="px-6 py-4 font-medium">Type</th>
+                        <th className="px-6 py-4 font-medium">Statut</th>
+                        <th className="px-6 py-4 font-medium">Date</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="divide-y divide-outline-variant">
+                      {data.quotes.map(quote => (
+                        <tr key={quote.id} className="hover:bg-surface-container-high transition-colors">
+                          <td className="px-6 py-4 font-bold">#{quote.id.slice(0, 8)}</td>
+                          <td className="px-6 py-4">+{quote.conversations?.user_identifier}</td>
+                          <td className="px-6 py-4">{quote.insurance_type?.toUpperCase()}</td>
+                          <td className="px-6 py-4">
+                            <span className={`px-3 py-1 rounded-full text-[12px] font-bold tracking-wide ${quote.status === 'sent' ? 'bg-[#FFC107]/20 text-[#FFC107] border border-[#FFC107]/30' : quote.status === 'accepted' ? 'bg-error/20 text-error border border-error/30' : 'bg-primary/20 text-primary border border-primary/30'}`}>
+                              {quote.status}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-on-surface-variant text-sm">
+                            {format(new Date(quote.created_at), 'd MMM yyyy', { locale: fr })}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           ) : activeTab === 'files' ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <h2 style={{ margin: 0, color: 'var(--text)' }}>Fichiers clients</h2>
-                <span style={{ fontSize: '14px', color: 'var(--text-dim)', fontWeight: '500' }}>
+            <div className="flex flex-col gap-6 p-lg h-full overflow-y-auto custom-scrollbar">
+              <div className="flex justify-between items-center">
+                <h2 className="font-headline-md text-[24px] text-on-surface m-0">Fichiers clients</h2>
+                <span className="text-[14px] text-on-surface-variant font-medium">
                   {clientFiles.length} fichier(s) trouvé(s)
                 </span>
               </div>
 
-              <div className="glass" style={{ padding: '10px', borderRadius: '12px', overflowX: 'auto' }}>
-                <table className="data-table" style={{ width: '100%', borderCollapse: 'collapse', color: 'var(--text)' }}>
-                  <thead>
-                    <tr style={{ textAlign: 'left', color: 'var(--text-dim)' }}>
-                      <th style={{ padding: '16px 20px', fontWeight: '500' }}>Client</th>
-                      <th style={{ padding: '16px 20px', fontWeight: '500' }}>Type</th>
-                      <th style={{ padding: '16px 20px', fontWeight: '500' }}>Aperçu</th>
-                      <th style={{ padding: '16px 20px', fontWeight: '500' }}>Date</th>
-                      <th style={{ padding: '16px 20px', fontWeight: '500' }}>Transcription / Description</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {clientFiles.length === 0 ? (
+              <div className="glass-panel p-md">
+                <div className="overflow-x-auto rounded-xl border border-outline-variant bg-surface-container-low/50">
+                  <table className="w-full text-left text-body-md text-on-surface">
+                    <thead className="bg-surface-container border-b border-outline-variant text-on-surface-variant font-bold">
                       <tr>
-                        <td colSpan="5" style={{ padding: '32px', textAlign: 'center', color: 'var(--text-dim)' }}>
-                          Aucun fichier média reçu pour le moment
-                        </td>
+                        <th className="px-6 py-4 font-medium">Client</th>
+                        <th className="px-6 py-4 font-medium">Type</th>
+                        <th className="px-6 py-4 font-medium">Aperçu</th>
+                        <th className="px-6 py-4 font-medium">Date</th>
+                        <th className="px-6 py-4 font-medium">Transcription / Description</th>
                       </tr>
-                    ) : (
-                      clientFiles.map(file => {
-                        const isImage = file.media_type?.includes('image');
-                        const isAudio = file.media_type?.includes('audio');
-                        const isDoc = file.media_type?.includes('pdf') || file.media_type?.includes('document') || file.media_type?.includes('word') || file.media_type?.includes('officedocument');
-                        
-                        return (
-                          <tr key={file.id} style={{ borderBottom: '1px solid var(--glass-border)' }}>
-                            <td style={{ padding: '16px 20px', fontWeight: '600' }}>
-                              +{file.conversations?.user_identifier || 'Inconnu'}
-                            </td>
-                            <td style={{ padding: '16px 20px' }}>
-                              <span style={{ 
-                                display: 'inline-block', 
-                                padding: '4px 8px', 
-                                borderRadius: '6px', 
-                                fontSize: '11px', 
-                                fontWeight: '700', 
-                                textTransform: 'uppercase',
-                                background: isImage ? 'rgba(59, 130, 246, 0.15)' : isAudio ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
-                                color: isImage ? '#3b82f6' : isAudio ? '#10b981' : '#ef4444'
-                              }}>
-                                {isImage ? '📷 Image' : isAudio ? '🎙️ Vocal' : '📄 Document'}
-                              </span>
-                            </td>
-                            <td style={{ padding: '16px 20px' }}>
-                              {(() => {
-                                const srcUrl = getMediaUrl(file.media_url);
-                                return (
-                                  <>
-                                    {isImage && srcUrl && (
-                                      <img 
-                                        src={srcUrl} 
-                                        alt="Miniature" 
-                                        style={{ width: '48px', height: '48px', borderRadius: '6px', objectFit: 'cover', cursor: 'pointer', border: '1px solid var(--glass-border)' }}
-                                        onClick={() => setLightboxMedia({ url: srcUrl, description: file.media_description || file.content })}
-                                      />
+                    </thead>
+                    <tbody className="divide-y divide-outline-variant">
+                      {clientFiles.length === 0 ? (
+                        <tr>
+                          <td colSpan="5" className="px-6 py-8 text-center text-on-surface-variant">
+                            Aucun fichier média reçu pour le moment
+                          </td>
+                        </tr>
+                      ) : (
+                        clientFiles.map(file => {
+                          const isImage = file.media_type?.includes('image');
+                          const isAudio = file.media_type?.includes('audio');
+                          const isDoc = file.media_type?.includes('pdf') || file.media_type?.includes('document') || file.media_type?.includes('word') || file.media_type?.includes('officedocument');
+                          
+                          return (
+                            <tr key={file.id} className="hover:bg-surface-container-high transition-colors">
+                              <td className="px-6 py-4 font-bold">
+                                +{file.conversations?.user_identifier || 'Inconnu'}
+                              </td>
+                              <td className="px-6 py-4">
+                                <span className={`inline-block px-3 py-1 rounded-lg text-[11px] font-bold uppercase ${isImage ? 'bg-primary/20 text-primary border border-primary/30' : isAudio ? 'bg-[#FFC107]/20 text-[#FFC107] border border-[#FFC107]/30' : 'bg-error/20 text-error border border-error/30'}`}>
+                                  {isImage ? '📷 Image' : isAudio ? '🎙️ Vocal' : '📄 Document'}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4">
+                                {(() => {
+                                  const srcUrl = getMediaUrl(file.media_url);
+                                  return (
+                                    <>
+                                      {isImage && srcUrl && (
+                                        <img 
+                                          src={srcUrl} 
+                                          alt="Miniature" 
+                                          className="w-12 h-12 rounded-lg object-cover cursor-pointer border border-outline-variant shadow-sm"
+                                          onClick={() => setLightboxMedia({ url: srcUrl, description: file.media_description || file.content })}
+                                        />
+                                      )}
+                                      {isAudio && srcUrl && (
+                                        <div 
+                                          className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer bg-[#FFC107]/20 text-[#FFC107] hover:bg-[#FFC107]/30 transition-colors"
+                                          onClick={() => {
+                                            const audio = new Audio(srcUrl);
+                                            audio.play().catch(e => console.log('Playback failed', e));
+                                          }}
+                                          title="Lire le fichier audio"
+                                        >
+                                          <Play size={18} />
+                                        </div>
+                                      )}
+                                      {isDoc && srcUrl && (
+                                        <a 
+                                          href={srcUrl} 
+                                          target="_blank" 
+                                          rel="noreferrer" 
+                                          className="w-10 h-10 rounded-full flex items-center justify-center bg-error/20 text-error hover:bg-error/30 transition-colors"
+                                          title="Ouvrir le document"
+                                        >
+                                          <FileText size={18} />
+                                        </a>
+                                      )}
+                                    </>
+                                  );
+                                })()}
+                              </td>
+                              <td className="px-6 py-4 text-[13px] text-on-surface-variant">
+                                {file.created_at ? (
+                                  (() => {
+                                    try { return format(new Date(file.created_at), 'd MMM yyyy HH:mm', { locale: fr }) }
+                                    catch (e) { return 'Date invalide' }
+                                  })()
+                                ) : 'Date inconnue'}
+                              </td>
+                              <td className="px-6 py-4">
+                                <div className="flex items-start gap-3 max-w-[500px]">
+                                  <div className="flex-1 text-[13px] leading-relaxed text-on-surface whitespace-pre-wrap max-h-[100px] overflow-y-auto bg-surface-container-highest/30 p-3 rounded-lg border border-outline-variant custom-scrollbar">
+                                    {file.media_description || file.content || "Aucune description disponible."}
+                                  </div>
+                                  <button
+                                    onClick={() => {
+                                      navigator.clipboard.writeText(file.media_description || file.content || "");
+                                      setCopiedId(file.id);
+                                      setTimeout(() => setCopiedId(null), 2000);
+                                    }}
+                                    className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-bold transition-all shrink-0 border ${copiedId === file.id ? 'bg-primary text-on-primary border-primary' : 'glass-panel text-on-surface border-outline-variant hover:bg-surface-container'}`}
+                                  >
+                                    {copiedId === file.id ? (
+                                      <>
+                                        <Check size={14} />
+                                        <span>Copié !</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Copy size={14} />
+                                        <span>Copier</span>
+                                      </>
                                     )}
-                                    {isAudio && srcUrl && (
-                                      <div 
-                                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '38px', height: '38px', borderRadius: '50%', background: 'rgba(16, 185, 129, 0.15)', color: '#10b981', cursor: 'pointer' }}
-                                        onClick={() => {
-                                          const audio = new Audio(srcUrl);
-                                          audio.play().catch(e => console.log('Playback failed', e));
-                                        }}
-                                        title="Lire le fichier audio"
-                                      >
-                                        <Play size={18} fill="#10b981" />
-                                      </div>
-                                    )}
-                                    {isDoc && srcUrl && (
-                                      <a 
-                                        href={srcUrl} 
-                                        target="_blank" 
-                                        rel="noreferrer" 
-                                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '38px', height: '38px', borderRadius: '50%', background: 'rgba(239, 68, 68, 0.15)', color: '#ef4444', textDecoration: 'none' }}
-                                        title="Ouvrir le document"
-                                      >
-                                        <FileText size={18} />
-                                      </a>
-                                    )}
-                                  </>
-                                );
-                              })()}
-                            </td>
-                            <td style={{ padding: '16px 20px', fontSize: '13px', color: 'var(--text-dim)' }}>
-                              {file.created_at ? (
-                                (() => {
-                                  try { return format(new Date(file.created_at), 'd MMM yyyy HH:mm', { locale: fr }) }
-                                  catch (e) { return 'Date invalide' }
-                                })()
-                              ) : 'Date inconnue'}
-                            </td>
-                            <td style={{ padding: '16px 20px' }}>
-                              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', maxWidth: '500px' }}>
-                                <div style={{ flex: 1, fontSize: '13px', lineHeight: '1.5', color: 'var(--text)', whiteSpace: 'pre-wrap', maxHeight: '100px', overflowY: 'auto', background: 'rgba(255,255,255,0.02)', padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--glass-border)' }}>
-                                  {file.media_description || file.content || "Aucune description disponible."}
+                                  </button>
                                 </div>
-                                <button
-                                  onClick={() => {
-                                    navigator.clipboard.writeText(file.media_description || file.content || "");
-                                    setCopiedId(file.id);
-                                    setTimeout(() => setCopiedId(null), 2000);
-                                  }}
-                                  className="glass"
-                                  style={{ 
-                                    display: 'flex', 
-                                    alignItems: 'center', 
-                                    gap: '6px', 
-                                    padding: '8px 12px', 
-                                    background: copiedId === file.id ? 'var(--primary)' : 'rgba(255, 255, 255, 0.05)', 
-                                    color: copiedId === file.id ? 'white' : 'var(--text)', 
-                                    border: 'none', 
-                                    borderRadius: '8px', 
-                                    cursor: 'pointer', 
-                                    fontSize: '12px', 
-                                    fontWeight: '600',
-                                    transition: 'all 0.2s',
-                                    flexShrink: 0
-                                  }}
-                                >
-                                  {copiedId === file.id ? (
-                                    <>
-                                      <Check size={14} />
-                                      <span>Copié !</span>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <Copy size={14} />
-                                      <span>Copier</span>
-                                    </>
-                                  )}
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })
-                    )}
-                  </tbody>
-                </table>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           ) : activeTab === 'help' ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', maxWidth: '800px', margin: '0 auto' }}>
-              <h2 style={{ margin: 0, color: 'var(--text)' }}>Centre d'Aide</h2>
+            <div className="flex flex-col gap-6 max-w-3xl mx-auto p-lg h-full overflow-y-auto custom-scrollbar w-full">
+              <h2 className="font-headline-md text-[24px] text-on-surface m-0">Centre d'Aide</h2>
               
-              <div className="glass" style={{ padding: '32px', borderRadius: '16px' }}>
-                <h3 style={{ marginTop: 0, color: 'var(--text)' }}>Foire Aux Questions</h3>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', marginTop: '24px' }}>
+              <div className="glass-panel p-xl">
+                <h3 className="text-[18px] font-bold text-on-surface mb-6 m-0">Foire Aux Questions</h3>
+                <div className="flex flex-col gap-6">
                   <div>
-                    <h4 style={{ margin: '0 0 8px 0', color: 'var(--text)' }}>Comment passer en mode Conseiller ?</h4>
-                    <p style={{ margin: 0, color: 'var(--text-dim)', lineHeight: '1.6' }}>Dans l'onglet "Messages", sélectionnez une conversation puis utilisez l'interrupteur en haut à droite (MODE IA / MODE CONSEILLER). Une fois en mode Conseiller, l'IA ne répondra plus automatiquement à ce client.</p>
+                    <h4 className="text-body-lg font-bold text-on-surface mb-2 mt-0">Comment passer en mode Conseiller ?</h4>
+                    <p className="text-body-md text-on-surface-variant leading-relaxed m-0">Dans l'onglet "Messages", sélectionnez une conversation puis utilisez le bouton en haut à droite (Mode IA / Conseiller). Une fois en mode Conseiller, l'IA ne répondra plus automatiquement à ce client.</p>
                   </div>
                   <div>
-                    <h4 style={{ margin: '0 0 8px 0', color: 'var(--text)' }}>Que signifient les conversations urgentes ?</h4>
-                    <p style={{ margin: 0, color: 'var(--text-dim)', lineHeight: '1.6' }}>Le tableau de bord met en évidence les clients dont le dernier message date de plus de 30 minutes et qui n'ont pas reçu de réponse. Cela nécessite souvent une intervention humaine.</p>
+                    <h4 className="text-body-lg font-bold text-on-surface mb-2 mt-0">Que signifient les conversations urgentes ?</h4>
+                    <p className="text-body-md text-on-surface-variant leading-relaxed m-0">Le tableau de bord met en évidence les clients dont le dernier message date de plus de 30 minutes et qui n'ont pas reçu de réponse. Cela nécessite souvent une intervention humaine.</p>
                   </div>
                   <div>
-                    <h4 style={{ margin: '0 0 8px 0', color: 'var(--text)' }}>Comment exporter les données ?</h4>
-                    <p style={{ margin: 0, color: 'var(--text-dim)', lineHeight: '1.6' }}>Dans les onglets "Sinistres" ou "Devis", cliquez sur le bouton "Exporter (Excel)" en haut à droite pour télécharger un fichier contenant toutes les données actuelles.</p>
+                    <h4 className="text-body-lg font-bold text-on-surface mb-2 mt-0">Comment exporter les données ?</h4>
+                    <p className="text-body-md text-on-surface-variant leading-relaxed m-0">Dans les onglets "Sinistres" ou "Devis", cliquez sur le bouton "Exporter (Excel)" en haut à droite pour télécharger un fichier contenant toutes les données actuelles.</p>
                   </div>
                 </div>
               </div>
 
-              <div className="glass" style={{ padding: '32px', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--surface)' }}>
+              <div className="glass-panel p-xl flex items-center justify-between bg-surface-container-lowest">
                 <div>
-                  <h3 style={{ margin: '0 0 8px 0', color: 'var(--text)' }}>Besoin d'assistance technique ?</h3>
-                  <p style={{ margin: 0, color: 'var(--text-dim)' }}>Notre équipe de support est disponible sur WhatsApp.</p>
+                  <h3 className="text-[18px] font-bold text-on-surface mb-2 m-0">Besoin d'assistance technique ?</h3>
+                  <p className="text-body-md text-on-surface-variant m-0">Notre équipe de support est disponible sur WhatsApp.</p>
                 </div>
                 <a 
                   href="https://wa.me/212600000000" 
                   target="_blank" 
                   rel="noreferrer"
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '12px 24px', background: '#25D366', color: 'white', textDecoration: 'none', borderRadius: '8px', fontWeight: '600' }}
+                  className="flex items-center gap-2 px-6 py-3 bg-[#25D366] text-white no-underline rounded-xl font-bold hover:scale-105 active:scale-95 transition-all shadow-md"
                 >
                   <MessageSquare size={20} />
                   Contacter le support
@@ -977,52 +1054,19 @@ function App() {
             </div>
           ) : null}
         </div>
-      </main>
 
       {/* Lightbox Modal */}
       {lightboxMedia && (
         <div 
-          className="lightbox-backdrop" 
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            width: '100vw',
-            height: '100vh',
-            backgroundColor: 'rgba(0, 0, 0, 0.85)',
-            zIndex: 9999,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '24px'
-          }}
+          className="fixed inset-0 w-[100vw] h-[100vh] bg-black/85 z-[9999] flex flex-col items-center justify-center p-6 animate-fade-in" 
           onClick={() => setLightboxMedia(null)}
         >
           <div 
-            className="lightbox-content animate-fade-in"
-            style={{
-              position: 'relative',
-              maxWidth: '90%',
-              maxHeight: '80%',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center'
-            }}
+            className="relative max-w-[90%] max-h-[80%] flex flex-col items-center"
             onClick={(e) => e.stopPropagation()}
           >
             <button 
-              style={{
-                position: 'absolute',
-                top: '-40px',
-                right: '0',
-                background: 'none',
-                border: 'none',
-                color: 'white',
-                fontSize: '32px',
-                cursor: 'pointer',
-                lineHeight: 1
-              }}
+              className="absolute -top-10 right-0 bg-transparent border-none text-white text-[32px] cursor-pointer leading-none hover:text-primary transition-colors"
               onClick={() => setLightboxMedia(null)}
             >
               &times;
@@ -1030,60 +1074,34 @@ function App() {
             <img 
               src={lightboxMedia.url} 
               alt={lightboxMedia.description || "Media"} 
-              style={{
-                maxWidth: '100%',
-                maxHeight: '100%',
-                objectFit: 'contain',
-                borderRadius: '12px',
-                boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
-                border: '1px solid rgba(255,255,255,0.1)'
-              }}
+              className="max-w-full max-h-full object-contain rounded-xl shadow-2xl border border-white/10"
             />
             {lightboxMedia.description && (
-              <p style={{
-                color: 'white',
-                marginTop: '16px',
-                textAlign: 'center',
-                fontSize: '14px',
-                background: 'rgba(0,0,0,0.7)',
-                backdropFilter: 'blur(10px)',
-                padding: '10px 20px',
-                borderRadius: '24px',
-                maxWidth: '600px',
-                border: '1px solid rgba(255,255,255,0.1)',
-                lineHeight: '1.5'
-              }}>
+              <p className="text-white mt-4 text-center text-sm bg-black/70 backdrop-blur-md px-5 py-2.5 rounded-full max-w-[600px] border border-white/10 leading-relaxed m-0">
                 {lightboxMedia.description}
               </p>
             )}
           </div>
         </div>
       )}
-    </div>
+    </Layout>
   );
 }
 
-function NavItem({ active, onClick, icon, label, badge }) {
+function StatCard({ label, value, subtitle, icon, color = 'text-on-surface-variant' }) {
   return (
-    <div className={`nav-item ${active ? 'active' : ''}`} onClick={onClick} style={{ position: 'relative' }}>
-      {icon}
-      <span>{label}</span>
-      {badge > 0 && (
-        <div style={{ position: 'absolute', right: '12px', background: '#ef4444', color: 'white', fontSize: '12px', fontWeight: 'bold', padding: '2px 8px', borderRadius: '20px' }}>
-          {badge}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function StatCard({ label, value, subtitle }) {
-  return (
-    <div className="glass stat-card">
-      <span className="stat-label">{label}</span>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
-        <span className="stat-value">{value}</span>
-        {subtitle && <span style={{ fontSize: '14px', color: 'var(--text-dim)' }}>{subtitle}</span>}
+    <div className="glass-card p-md rounded-xl flex flex-col justify-between h-32">
+      <div className="flex justify-between items-start">
+        <span className="text-on-surface-variant font-label-md text-label-md">{label}</span>
+        {icon && <span className={`material-symbols-outlined ${color}`}>{icon}</span>}
+      </div>
+      <div>
+        <div className="text-display-lg font-display-lg leading-none text-on-surface">{value}</div>
+        {subtitle && (
+          <div className="text-primary text-body-sm font-body-sm mt-xs flex items-center gap-xs">
+            {subtitle}
+          </div>
+        )}
       </div>
     </div>
   );
