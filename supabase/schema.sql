@@ -52,3 +52,7 @@ CREATE POLICY "Allow all for authenticated" ON conversations FOR ALL USING (true
 CREATE POLICY "Allow all for authenticated" ON messages FOR ALL USING (true);
 CREATE POLICY "Allow all for authenticated" ON claims FOR ALL USING (true);
 CREATE POLICY "Allow all for authenticated" ON quotes FOR ALL USING (true);
+
+-- Enable Realtime for specific tables
+ALTER PUBLICATION supabase_realtime ADD TABLE messages;
+ALTER PUBLICATION supabase_realtime ADD TABLE conversations;
