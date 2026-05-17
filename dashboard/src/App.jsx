@@ -44,16 +44,24 @@ function App() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
+  const getMediaUrl = (urlOrId) => {
+    if (!urlOrId) return '';
+    if (urlOrId.startsWith('http://') || urlOrId.startsWith('https://')) return urlOrId;
+    return `https://assuria-production.up.railway.app/api/media/${urlOrId}`;
+  };
+
   const renderMessageContent = (msg) => {
+    const srcUrl = getMediaUrl(msg.media_url);
+
     if (msg.media_type) {
       if (msg.media_type.includes('image')) {
         return (
           <div 
             style={{ cursor: 'pointer', position: 'relative', overflow: 'hidden', borderRadius: '12px' }} 
-            onClick={() => setLightboxMedia({ url: msg.media_url, description: msg.media_description || msg.content })}
+            onClick={() => setLightboxMedia({ url: srcUrl, description: msg.media_description || msg.content })}
           >
             <img 
-              src={msg.media_url} 
+              src={srcUrl} 
               alt={msg.content} 
               style={{ display: 'block', maxWidth: '240px', maxHeight: '180px', borderRadius: '12px', objectFit: 'cover' }} 
             />
@@ -63,7 +71,7 @@ function App() {
         return (
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 6px' }}>
             <span style={{ fontSize: '20px', flexShrink: 0 }}>🎙️</span>
-            <audio src={msg.media_url} controls style={{ height: '32px', width: '210px' }} />
+            <audio src={srcUrl} controls style={{ height: '32px', width: '210px' }} />
           </div>
         );
       } else if (msg.media_type.includes('pdf') || msg.media_type.includes('document') || msg.media_type.includes('word') || msg.media_type.includes('officedocument')) {
@@ -80,7 +88,7 @@ function App() {
                 {msg.media_type.split('/')[1]?.toUpperCase() || 'PDF'}
               </span>
             </div>
-            <a href={msg.media_url} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px', borderRadius: '50%', background: 'var(--primary)', color: 'white', cursor: 'pointer', flexShrink: 0 }}>
+            <a href={srcUrl} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px', borderRadius: '50%', background: 'var(--primary)', color: 'white', cursor: 'pointer', flexShrink: 0 }}>
               <Download size={16} />
             </a>
           </div>
@@ -229,7 +237,7 @@ function App() {
   }, [chatMessages]);
 
   const fetchData = async () => {
-    const [convs, clms, qts, msgs, fileMsgs] = await Promise.all([
+    const [convs, clms, qts, msgs, filesData] = await Promise.all([
       supabase.from('conversations').select('*, messages(content, created_at, sender, media_type)').order('last_message_at', { ascending: false }),
       supabase.from('claims').select('*, conversations(user_identifier)').order('created_at', { ascending: false }),
       supabase.from('quotes').select('*, conversations(user_identifier)').order('created_at', { ascending: false }),
@@ -251,7 +259,9 @@ function App() {
       quotes: qts.data || [],
       messages: msgs.data || []
     });
-    setClientFiles(fileMsgs.data || []);
+    
+    console.log('Fichiers:', filesData.data);
+    setClientFiles(filesData.data || []);
     setLoading(false);
   };
 
@@ -829,37 +839,44 @@ function App() {
                               </span>
                             </td>
                             <td style={{ padding: '16px 20px' }}>
-                              {isImage && file.media_url && (
-                                <img 
-                                  src={file.media_url} 
-                                  alt="Miniature" 
-                                  style={{ width: '48px', height: '48px', borderRadius: '6px', objectFit: 'cover', cursor: 'pointer', border: '1px solid var(--glass-border)' }}
-                                  onClick={() => setLightboxMedia({ url: file.media_url, description: file.media_description || file.content })}
-                                />
-                              )}
-                              {isAudio && file.media_url && (
-                                <div 
-                                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '38px', height: '38px', borderRadius: '50%', background: 'rgba(16, 185, 129, 0.15)', color: '#10b981', cursor: 'pointer' }}
-                                  onClick={() => {
-                                    const audio = new Audio(file.media_url);
-                                    audio.play().catch(e => console.log('Playback failed', e));
-                                  }}
-                                  title="Lire le fichier audio"
-                                >
-                                  <Play size={18} fill="#10b981" />
-                                </div>
-                              )}
-                              {isDoc && (
-                                <a 
-                                  href={file.media_url} 
-                                  target="_blank" 
-                                  rel="noreferrer" 
-                                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '38px', height: '38px', borderRadius: '50%', background: 'rgba(239, 68, 68, 0.15)', color: '#ef4444', textDecoration: 'none' }}
-                                  title="Ouvrir le document"
-                                >
-                                  <FileText size={18} />
-                                </a>
-                              )}
+                              {(() => {
+                                const srcUrl = getMediaUrl(file.media_url);
+                                return (
+                                  <>
+                                    {isImage && srcUrl && (
+                                      <img 
+                                        src={srcUrl} 
+                                        alt="Miniature" 
+                                        style={{ width: '48px', height: '48px', borderRadius: '6px', objectFit: 'cover', cursor: 'pointer', border: '1px solid var(--glass-border)' }}
+                                        onClick={() => setLightboxMedia({ url: srcUrl, description: file.media_description || file.content })}
+                                      />
+                                    )}
+                                    {isAudio && srcUrl && (
+                                      <div 
+                                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '38px', height: '38px', borderRadius: '50%', background: 'rgba(16, 185, 129, 0.15)', color: '#10b981', cursor: 'pointer' }}
+                                        onClick={() => {
+                                          const audio = new Audio(srcUrl);
+                                          audio.play().catch(e => console.log('Playback failed', e));
+                                        }}
+                                        title="Lire le fichier audio"
+                                      >
+                                        <Play size={18} fill="#10b981" />
+                                      </div>
+                                    )}
+                                    {isDoc && srcUrl && (
+                                      <a 
+                                        href={srcUrl} 
+                                        target="_blank" 
+                                        rel="noreferrer" 
+                                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '38px', height: '38px', borderRadius: '50%', background: 'rgba(239, 68, 68, 0.15)', color: '#ef4444', textDecoration: 'none' }}
+                                        title="Ouvrir le document"
+                                      >
+                                        <FileText size={18} />
+                                      </a>
+                                    )}
+                                  </>
+                                );
+                              })()}
                             </td>
                             <td style={{ padding: '16px 20px', fontSize: '13px', color: 'var(--text-dim)' }}>
                               {format(new Date(file.created_at), 'd MMM yyyy HH:mm', { locale: fr })}

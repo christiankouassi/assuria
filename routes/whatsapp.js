@@ -164,7 +164,7 @@ INSTRUCTION : Affiche TOUTES ces informations extraites au client sous forme de 
                 conversation_id: conv.id,
                 sender: 'user',
                 content: imageContext,
-                media_url: url,
+                media_url: mediaInfo.id,
                 media_type: mimeType,
                 media_description: desc
             }]);
@@ -231,7 +231,7 @@ INSTRUCTION : Affiche TOUTES ces informations extraites au client sous forme de 
                 conversation_id: conv.id,
                 sender: 'user',
                 content: transcription,
-                media_url: url,
+                media_url: mediaInfo.id,
                 media_type: mimeType,
                 media_description: transcription
             }]);
@@ -262,20 +262,23 @@ INSTRUCTION : Affiche TOUTES ces informations extraites au client sous forme de 
             await sendWhatsAppMessage(from, replyText);
 
         } else if (type === 'document') {
-            const mimeType = message.document.mime_type;
-            const mediaId = message.document.id;
-            const fileName = message.document.filename;
+            console.log('Type message reçu:', message.type);
+            console.log('Document info:', JSON.stringify(message.document));
+
+            const mimeType = message.document?.mime_type;
+            const fileName = message.document?.filename;
+            const mediaId = message.document?.id;
             
+            const isPDF = mimeType?.includes('pdf') || fileName?.endsWith('.pdf');
+            const isWord = mimeType?.includes('word') || mimeType?.includes('officedocument') || fileName?.endsWith('.docx') || fileName?.endsWith('.doc');
+
             let textContent = "";
             console.log(`[Media] Traitement du document: ${fileName} (${mimeType})`);
 
-            if (mimeType === 'application/pdf' || (mimeType && mimeType.includes('pdf')) || (fileName && fileName.toLowerCase().endsWith('.pdf'))) {
+            if (isPDF) {
                 const pdfData = await pdf(buffer);
                 textContent = pdfData.text;
-            } else if (
-                (mimeType && (mimeType.includes('word') || mimeType.includes('docx') || mimeType.includes('officedocument'))) || 
-                (fileName && (fileName.toLowerCase().endsWith('.docx') || fileName.toLowerCase().endsWith('.doc')))
-            ) {
+            } else if (isWord) {
                 const docxResult = await mammoth.extractRawText({ buffer: buffer });
                 textContent = docxResult.value;
             }
@@ -297,7 +300,7 @@ INSTRUCTION : Affiche TOUTES ces informations extraites au client sous forme de 
                     conversation_id: conv.id,
                     sender: 'user',
                     content: `Document reçu: ${fileName}`,
-                    media_url: url,
+                    media_url: mediaId,
                     media_type: mimeType,
                     media_description: summary
                 }]);
