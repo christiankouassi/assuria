@@ -37,20 +37,34 @@ function App() {
   useEffect(() => {
     fetchData();
     
-    // Subscribe to changes
-    const channels = [
-      supabase.channel('conversations').on('postgres_changes', { event: '*', schema: 'public', table: 'conversations' }, fetchData).subscribe(),
-      supabase.channel('claims').on('postgres_changes', { event: '*', schema: 'public', table: 'claims' }, fetchData).subscribe(),
-      supabase.channel('quotes').on('postgres_changes', { event: '*', schema: 'public', table: 'quotes' }, fetchData).subscribe(),
-      supabase.channel('messages').on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
-        if (selectedConversation && payload.new.conversation_id === selectedConversation.id) {
-          setChatMessages(prev => [...prev, payload.new]);
-        }
-      }).subscribe()
-    ];
+    // Subscribe to general changes
+    const channel = supabase.channel('dashboard_data')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'conversations' }, fetchData)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'claims' }, fetchData)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'quotes' }, fetchData)
+      .subscribe();
 
     return () => {
-      channels.forEach(ch => supabase.removeChannel(ch));
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!selectedConversation) return;
+
+    // Subscribe to messages for the selected conversation
+    const channel = supabase.channel(`messages_${selectedConversation.id}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `conversation_id=eq.${selectedConversation.id}` }, (payload) => {
+        setChatMessages(prev => {
+          // Prevent duplicates if we already have this message
+          if (prev.some(m => m.id === payload.new.id)) return prev;
+          return [...prev, payload.new];
+        });
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
     };
   }, [selectedConversation]);
 
@@ -92,16 +106,26 @@ function App() {
     e.preventDefault();
     if (!newMessage.trim() || aiMode) return;
 
-    const msgToSave = {
-      conversation_id: selectedConversation.id,
-      sender: 'ai', // On simule une réponse AI ou on pourrait ajouter 'advisor' si le schéma le permettait
-      content: newMessage
-    };
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+      const response = await fetch(`${apiUrl}/api/conversations/${selectedConversation.id}/message`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ content: newMessage })
+      });
 
-    const { error } = await supabase.from('messages').insert([msgToSave]);
-    if (!error) {
-      setNewMessage('');
-      // Note: Le message apparaîtra via l'abonnement temps réel
+      if (response.ok) {
+        setNewMessage('');
+        // Note: Le message apparaîtra via l'abonnement temps réel
+      } else {
+        console.error('Erreur lors de l\'envoi du message');
+        alert("Erreur lors de l'envoi du message");
+      }
+    } catch (error) {
+      console.error('Erreur:', error);
+      alert("Erreur de connexion au serveur");
     }
   };
 

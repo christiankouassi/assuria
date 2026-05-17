@@ -32,8 +32,9 @@ Si l'utilisateur demande un prix ou un devis, l'intent est "quote".
 
 async function getAIResponse(userMessage, history = []) {
     try {
+        console.log('Clé Gemini:', process.env.GEMINI_API_KEY?.substring(0, 10));
         const model = genAI.getGenerativeModel({ 
-            model: "gemini-2.0-flash-exp",
+            model: "gemini-2.0-flash",
             systemInstruction: SYSTEM_PROMPT 
         });
 

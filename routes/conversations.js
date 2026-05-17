@@ -1,0 +1,85 @@
+const express = require('express');
+const router = express.Router();
+const axios = require('axios');
+const supabase = require('../services/supabase');
+
+const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN;
+const PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID;
+
+// POST /api/conversations/:id/message
+router.post('/:id/message', async (req, res) => {
+    const conversationId = req.params.id;
+    const { content } = req.body;
+
+    if (!content) {
+        return res.status(400).json({ error: 'Le contenu du message est requis' });
+    }
+
+    try {
+        // 1. Récupérer le numéro du client depuis la conversation
+        const { data: conv, error: convError } = await supabase
+            .from('conversations')
+            .select('user_identifier, platform')
+            .eq('id', conversationId)
+            .single();
+
+        if (convError || !conv) {
+            console.error('Erreur récupération conversation:', convError);
+            return res.status(404).json({ error: 'Conversation non trouvée' });
+        }
+
+        const to = conv.user_identifier;
+
+        // 2. Envoyer via l'API WhatsApp Business si c'est une conv whatsapp
+        if (conv.platform === 'whatsapp') {
+            console.log(`[Conseiller] Envoi WhatsApp à ${to}...`);
+            try {
+                const waResponse = await axios({
+                    method: 'POST',
+                    url: `https://graph.facebook.com/v19.0/${PHONE_NUMBER_ID}/messages`,
+                    data: {
+                        messaging_product: 'whatsapp',
+                        to: to,
+                        type: 'text',
+                        text: { body: content }
+                    },
+                    headers: { 'Authorization': `Bearer ${WHATSAPP_TOKEN}` }
+                });
+                console.log(`[Conseiller] WhatsApp a répondu: ${waResponse.status} ${waResponse.statusText}`);
+            } catch (waErr) {
+                console.error('[Conseiller] Erreur lors de l\'envoi WhatsApp:', waErr.response ? JSON.stringify(waErr.response.data) : waErr.message);
+                return res.status(500).json({ error: 'Erreur lors de l\'envoi via WhatsApp', details: waErr.message });
+            }
+        } else {
+            console.log(`[Conseiller] Envoi pour la plateforme ${conv.platform}...`);
+            // Handle other platforms if necessary (e.g. web widget uses polling or websocket)
+        }
+
+        // 3. Sauvegarder le message dans Supabase
+        const { data: newMessage, error: msgError } = await supabase
+            .from('messages')
+            .insert([
+                { conversation_id: conversationId, sender: 'advisor', content: content }
+            ])
+            .select()
+            .single();
+
+        if (msgError) {
+            console.error('Erreur sauvegarde message conseiller:', msgError);
+            return res.status(500).json({ error: 'Erreur lors de la sauvegarde du message' });
+        }
+
+        // 4. Update last interaction
+        await supabase.from('conversations')
+            .update({ last_message_at: new Date() })
+            .eq('id', conversationId);
+
+        res.status(200).json(newMessage);
+
+    } catch (error) {
+        console.error('Erreur inattendue dans /api/conversations/:id/message:', error);
+        res.status(500).json({ error: 'Erreur interne du serveur' });
+    }
+});
+
+module.exports = router;
