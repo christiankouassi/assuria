@@ -107,7 +107,7 @@ function App() {
     if (!newMessage.trim() || aiMode) return;
 
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://assuria-production.up.railway.app';
       const response = await fetch(`${apiUrl}/api/conversations/${selectedConversation.id}/message`, {
         method: 'POST',
         headers: {
