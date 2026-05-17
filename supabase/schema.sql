@@ -3,7 +3,7 @@
 -- 1. Conversations Table
 CREATE TABLE IF NOT EXISTS conversations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_phone TEXT NOT NULL UNIQUE,
+    user_identifier TEXT NOT NULL UNIQUE,
     last_interaction TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     status TEXT DEFAULT 'active', -- active, archived
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS conversations (
 CREATE TABLE IF NOT EXISTS messages (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     conversation_id UUID REFERENCES conversations(id) ON DELETE CASCADE,
-    sender TEXT NOT NULL, -- 'user', 'bot', 'advisor'
+    sender TEXT NOT NULL, -- 'user', 'ai', 'advisor'
     content TEXT NOT NULL,
     type TEXT DEFAULT 'text', -- text, image, document
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
@@ -56,3 +56,7 @@ CREATE POLICY "Allow all for authenticated" ON quotes FOR ALL USING (true);
 -- Enable Realtime for specific tables
 ALTER PUBLICATION supabase_realtime ADD TABLE messages;
 ALTER PUBLICATION supabase_realtime ADD TABLE conversations;
+
+ALTER TABLE messages DROP CONSTRAINT IF EXISTS messages_sender_check;
+ALTER TABLE messages ADD CONSTRAINT messages_sender_check 
+CHECK (sender IN ('user', 'ai', 'advisor'));

@@ -17,13 +17,13 @@ router.post('/message', async (req, res) => {
         let { data: conv, error: convError } = await supabase
             .from('conversations')
             .select('id')
-            .eq('user_phone', identifier)
+            .eq('user_identifier', identifier)
             .single();
 
         if (convError || !conv) {
             const { data: newConv, error: createError } = await supabase
                 .from('conversations')
-                .insert([{ user_phone: identifier }])
+                .insert([{ user_identifier: identifier }])
                 .select()
                 .single();
             conv = newConv;
@@ -47,7 +47,7 @@ router.post('/message', async (req, res) => {
 
         // 5. Save Bot Message
         await supabase.from('messages').insert([
-            { conversation_id: conv.id, sender: 'bot', content: aiResult.response }
+            { conversation_id: conv.id, sender: 'ai', content: aiResult.response }
         ]);
 
         // 6. Intent-specific (Claims/Quotes)
@@ -73,7 +73,7 @@ router.get('/history/:sessionId', async (req, res) => {
         const { data: conv } = await supabase
             .from('conversations')
             .select('id')
-            .eq('user_phone', identifier)
+            .eq('user_identifier', identifier)
             .single();
 
         if (!conv) return res.json([]);
