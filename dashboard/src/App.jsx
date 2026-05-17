@@ -24,6 +24,9 @@ function App() {
   });
   const [loading, setLoading] = useState(true);
   const messagesEndRef = useRef(null);
+  const [lightboxMedia, setLightboxMedia] = useState(null);
+  const [notifications, setNotifications] = useState([]);
+  const [showNotifications, setShowNotifications] = useState(false);
   
   const [theme, setTheme] = useState(localStorage.getItem('theme') || 'dark');
   const [unreadCounts, setUnreadCounts] = useState({});
@@ -70,6 +73,28 @@ function App() {
         ...prev,
         [msg.conversation_id]: (prev[msg.conversation_id] || 0) + 1
       }));
+
+      // Gestion de la notification média
+      if (msg.media_url) {
+        supabase.from('conversations').select('user_identifier').eq('id', msg.conversation_id).single().then(({ data: convData }) => {
+          const phone = convData ? convData.user_identifier : 'client';
+          let typeLabel = 'Document';
+          if (msg.media_type) {
+            if (msg.media_type.startsWith('image/')) {
+              typeLabel = 'Photo';
+            } else if (msg.media_type.startsWith('audio/')) {
+              typeLabel = 'Vocal';
+            }
+          }
+          const newNotif = {
+            id: msg.id || Date.now(),
+            text: `Média reçu de +${phone} — ${typeLabel}`,
+            created_at: msg.created_at || new Date().toISOString(),
+            read: false
+          };
+          setNotifications(prev => [newNotif, ...prev]);
+        });
+      }
     }
   };
 
@@ -287,10 +312,74 @@ function App() {
             >
               {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
             </button>
-            <div style={{ position: 'relative', cursor: 'pointer', color: 'var(--text-dim)' }}>
-              <Bell size={20} />
-              {Object.values(unreadCounts).reduce((a, b) => a + b, 0) > 0 && (
-                <span style={{ position: 'absolute', top: '-4px', right: '-4px', background: 'red', width: '8px', height: '8px', borderRadius: '50%' }}></span>
+            <div style={{ position: 'relative' }}>
+              <button 
+                onClick={() => setShowNotifications(!showNotifications)}
+                style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-dim)', position: 'relative', display: 'flex', alignItems: 'center', padding: '4px' }}
+              >
+                <Bell size={20} />
+                {notifications.filter(n => !n.read).length > 0 && (
+                  <span style={{ position: 'absolute', top: '0px', right: '0px', background: '#ef4444', color: 'white', fontSize: '9px', fontWeight: 'bold', width: '14px', height: '14px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    {notifications.filter(n => !n.read).length}
+                  </span>
+                )}
+              </button>
+              
+              {showNotifications && (
+                <div className="glass notifications-dropdown" style={{
+                  position: 'absolute',
+                  top: '35px',
+                  right: '0',
+                  width: '320px',
+                  maxHeight: '400px',
+                  overflowY: 'auto',
+                  borderRadius: '12px',
+                  boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
+                  zIndex: 1000,
+                  padding: '12px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '8px',
+                  border: '1px solid var(--glass-border)',
+                  background: 'var(--surface)'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--glass-border)', paddingBottom: '8px', marginBottom: '4px' }}>
+                    <span style={{ fontWeight: '700', color: 'var(--text)' }}>Notifications</span>
+                    {notifications.length > 0 && (
+                      <button 
+                        onClick={() => setNotifications(prev => prev.map(n => ({ ...n, read: true })))}
+                        style={{ background: 'none', border: 'none', color: 'var(--primary)', fontSize: '11px', cursor: 'pointer', fontWeight: '600' }}
+                      >
+                        Tout marquer lu
+                      </button>
+                    )}
+                  </div>
+                  {notifications.length === 0 ? (
+                    <div style={{ padding: '16px', textAlign: 'center', color: 'var(--text-dim)', fontSize: '13px' }}>
+                      Aucune nouvelle notification
+                    </div>
+                  ) : (
+                    notifications.map(n => (
+                      <div 
+                        key={n.id} 
+                        style={{ 
+                          padding: '10px', 
+                          borderRadius: '8px', 
+                          background: n.read ? 'transparent' : 'rgba(var(--primary-rgb), 0.1)', 
+                          borderLeft: n.read ? 'none' : '3px solid var(--primary)',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '4px'
+                        }}
+                      >
+                        <span style={{ fontSize: '13px', color: 'var(--text)', fontWeight: n.read ? 'normal' : '600' }}>{n.text}</span>
+                        <span style={{ fontSize: '10px', color: 'var(--text-dim)' }}>
+                          {format(new Date(n.created_at), 'dd/MM HH:mm')}
+                        </span>
+                      </div>
+                    ))
+                  )}
+                </div>
               )}
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: 'var(--surface)', padding: '6px 12px', borderRadius: '30px' }}>
@@ -415,8 +504,30 @@ function App() {
                     <div className="messages-container" style={{ flex: 1, padding: '24px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
                       {chatMessages.map(msg => (
                         <div key={msg.id} style={{ display: 'flex', flexDirection: 'column', alignItems: msg.sender === 'user' ? 'flex-end' : 'flex-start' }}>
-                          <div className={`message-bubble ${msg.sender === 'user' ? 'message-user' : 'message-ai'}`} style={{ marginBottom: '4px' }}>
-                            {msg.content}
+                          <div className={`message-bubble ${msg.sender === 'user' ? 'message-user' : 'message-ai'}`} style={{ marginBottom: '4px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            {msg.media_url && msg.media_type && msg.media_type.startsWith('image/') && (
+                              <img 
+                                src={msg.media_url} 
+                                alt={msg.media_description || "Image"} 
+                                style={{ maxWidth: '240px', maxHeight: '180px', borderRadius: '8px', cursor: 'pointer', objectFit: 'cover' }}
+                                onClick={() => setLightboxMedia({ url: msg.media_url, description: msg.media_description })}
+                              />
+                            )}
+                            {msg.media_url && msg.media_type && msg.media_type.startsWith('audio/') && (
+                              <audio src={msg.media_url} controls style={{ maxWidth: '240px' }} />
+                            )}
+                            {msg.media_url && msg.media_type && !msg.media_type.startsWith('image/') && !msg.media_type.startsWith('audio/') && (
+                              <a href={msg.media_url} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--primary)', textDecoration: 'underline', fontSize: '13px' }}>
+                                <Download size={16} />
+                                Document (+{msg.media_type.split('/')[1] || 'Fichier'})
+                              </a>
+                            )}
+                            <div>{msg.content}</div>
+                            {msg.media_description && msg.media_description !== msg.content && !msg.media_type?.startsWith('audio/') && (
+                              <div style={{ fontSize: '12px', opacity: 0.85, fontStyle: 'italic', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '4px' }}>
+                                {msg.media_description}
+                              </div>
+                            )}
                           </div>
                           <span style={{ fontSize: '11px', color: 'var(--text-dim)', padding: '0 4px' }}>
                             {format(new Date(msg.created_at), 'HH:mm')}
@@ -484,8 +595,34 @@ function App() {
                         <td style={{ fontWeight: '600' }}>#{claim.id.slice(0, 8)}</td>
                         <td>+{claim.conversations?.user_identifier}</td>
                         <td><span className={`status-badge status-${claim.status}`}>{claim.status}</span></td>
-                        <td style={{ fontSize: '14px', maxWidth: '300px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {claim.description || "Détails non fournis"}
+                        <td style={{ fontSize: '14px', maxWidth: '350px' }}>
+                          <div style={{ marginBottom: claim.media_urls?.length ? '8px' : '0' }}>
+                            {claim.description || "Détails non fournis"}
+                          </div>
+                          {claim.media_urls && claim.media_urls.length > 0 && (
+                            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                              {claim.media_urls.map((media, idx) => (
+                                media.url && (
+                                  <div key={idx} style={{ position: 'relative' }}>
+                                    {media.type?.startsWith('audio/') ? (
+                                      <audio src={media.url} controls style={{ width: '120px', scale: '0.8' }} />
+                                    ) : media.type?.startsWith('image/') || !media.type ? (
+                                      <img 
+                                        src={media.url}
+                                        alt={media.description || "Media"}
+                                        style={{ width: '48px', height: '48px', borderRadius: '6px', objectFit: 'cover', cursor: 'pointer', border: '1px solid var(--glass-border)', boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }}
+                                        onClick={() => setLightboxMedia(media)}
+                                      />
+                                    ) : (
+                                      <a href={media.url} target="_blank" rel="noreferrer" className="glass" style={{ fontSize: '11px', padding: '4px 8px', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '4px', textDecoration: 'none', color: 'var(--text)' }}>
+                                        Doc
+                                      </a>
+                                    )}
+                                  </div>
+                                )
+                              ))}
+                            </div>
+                          )}
                         </td>
                         <td>{format(new Date(claim.created_at), 'd MMM yyyy', { locale: fr })}</td>
                       </tr>
@@ -575,6 +712,87 @@ function App() {
           ) : null}
         </div>
       </main>
+
+      {/* Lightbox Modal */}
+      {lightboxMedia && (
+        <div 
+          className="lightbox-backdrop" 
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            width: '100vw',
+            height: '100vh',
+            backgroundColor: 'rgba(0, 0, 0, 0.85)',
+            zIndex: 9999,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '24px'
+          }}
+          onClick={() => setLightboxMedia(null)}
+        >
+          <div 
+            className="lightbox-content animate-fade-in"
+            style={{
+              position: 'relative',
+              maxWidth: '90%',
+              maxHeight: '80%',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button 
+              style={{
+                position: 'absolute',
+                top: '-40px',
+                right: '0',
+                background: 'none',
+                border: 'none',
+                color: 'white',
+                fontSize: '32px',
+                cursor: 'pointer',
+                lineHeight: 1
+              }}
+              onClick={() => setLightboxMedia(null)}
+            >
+              &times;
+            </button>
+            <img 
+              src={lightboxMedia.url} 
+              alt={lightboxMedia.description || "Media"} 
+              style={{
+                maxWidth: '100%',
+                maxHeight: '100%',
+                objectFit: 'contain',
+                borderRadius: '12px',
+                boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+                border: '1px solid rgba(255,255,255,0.1)'
+              }}
+            />
+            {lightboxMedia.description && (
+              <p style={{
+                color: 'white',
+                marginTop: '16px',
+                textAlign: 'center',
+                fontSize: '14px',
+                background: 'rgba(0,0,0,0.7)',
+                backdropFilter: 'blur(10px)',
+                padding: '10px 20px',
+                borderRadius: '24px',
+                maxWidth: '600px',
+                border: '1px solid rgba(255,255,255,0.1)',
+                lineHeight: '1.5'
+              }}>
+                {lightboxMedia.description}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

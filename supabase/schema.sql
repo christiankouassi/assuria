@@ -60,3 +60,9 @@ ALTER PUBLICATION supabase_realtime ADD TABLE conversations;
 ALTER TABLE messages DROP CONSTRAINT IF EXISTS messages_sender_check;
 ALTER TABLE messages ADD CONSTRAINT messages_sender_check 
 CHECK (sender IN ('user', 'ai', 'advisor'));
+
+ALTER TABLE claims ADD COLUMN IF NOT EXISTS media_urls JSONB DEFAULT '[]';
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS media_url TEXT;
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS media_type TEXT;
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS media_description TEXT;
+
