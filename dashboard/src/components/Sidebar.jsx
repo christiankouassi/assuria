@@ -19,7 +19,7 @@ function NavItem({ active, onClick, icon, label, badge }) {
   );
 }
 
-export default function Sidebar({ activeTab, setActiveTab, unreadCounts }) {
+export default function Sidebar({ activeTab, setActiveTab, unreadCounts, onNewPolicy }) {
   const tabs = [
     { id: 'dashboard', icon: 'dashboard', label: 'Dashboard' },
     { id: 'conversations', icon: 'chat', label: 'Messages', badge: unreadCounts?.messages },
@@ -50,7 +50,10 @@ export default function Sidebar({ activeTab, setActiveTab, unreadCounts }) {
       </nav>
 
       <div className="mt-auto space-y-md">
-        <button className="w-full bg-primary text-on-primary py-md rounded-lg font-bold transition-transform scale-95 active:scale-90 flex items-center justify-center gap-sm">
+        <button 
+          onClick={onNewPolicy}
+          className="w-full bg-primary text-on-primary py-md rounded-lg font-bold transition-transform scale-95 active:scale-90 flex items-center justify-center gap-sm cursor-pointer"
+        >
           <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>add</span>
           New Policy
         </button>

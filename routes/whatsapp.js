@@ -98,7 +98,7 @@ async function processMessage(body) {
     // 1. Get or Create Conversation
     let { data: conv, error: convError } = await supabase
         .from('conversations')
-        .select('id')
+        .select('id, client_profile')
         .eq('user_identifier', from)
         .single();
 
@@ -108,13 +108,19 @@ async function processMessage(body) {
             .from('conversations')
             .insert([{ 
                 user_identifier: from,
-                platform: 'whatsapp'
+                platform: 'whatsapp',
+                client_profile: {}
             }])
             .select()
             .single();
         
         if (createError) throw createError;
         conv = newConv;
+    }
+
+    const isAiEnabled = conv.client_profile?.ai_mode !== false;
+    if (!isAiEnabled) {
+        console.log(`[WhatsApp] Mode Conseiller (Humain) actif pour ${from}. L'IA n'enverra pas de réponse automatique.`);
     }
 
     let msgBody = "";
@@ -126,6 +132,8 @@ async function processMessage(body) {
     if (type === 'text') {
         msgBody = message.text ? message.text.body : "";
         if (!msgBody) return;
+    } else if (type === 'video') {
+        msgBody = '[Le client a envoyé une vidéo. Réponds-lui que tu ne peux pas encore traiter les vidéos mais que tu peux analyser des photos ou des documents PDF.]';
     } else if (type === 'image') {
         mediaInfo = message.image;
         mimeType = mediaInfo.mime_type;
@@ -187,35 +195,39 @@ INSTRUCTION : Affiche TOUTES ces informations extraites au client sous forme de 
                     .eq('id', pendingClaim.id);
             }
 
-            // Récupère l'historique pour le contexte de l'assistant (qui contient maintenant le message utilisateur avec imageContext)
-            const { data: history } = await supabase
-                .from('messages')
-                .select('sender, content')
-                .eq('conversation_id', conv.id)
-                .order('created_at', { ascending: true })
-                .limit(50);
+            if (isAiEnabled) {
+                // Récupère l'historique pour le contexte de l'assistant (qui contient maintenant le message utilisateur avec imageContext)
+                const { data: history } = await supabase
+                    .from('messages')
+                    .select('sender, content')
+                    .eq('conversation_id', conv.id)
+                    .order('created_at', { ascending: true })
+                    .limit(50);
 
-            const aiResult = await getAIResponse(imageContext, history || [], conv.client_profile);
+                const aiResult = await getAIResponse(imageContext, history || [], conv.client_profile);
 
-            // Mise à jour du profil client si nécessaire
-            if (aiResult.extracted_profile && Object.keys(aiResult.extracted_profile).length > 0) {
-                const updatedProfile = { ...(conv.client_profile || {}), ...aiResult.extracted_profile };
-                await supabase.from('conversations').update({ client_profile: updatedProfile }).eq('id', conv.id);
-                conv.client_profile = updatedProfile;
+                // Mise à jour du profil client si nécessaire
+                if (aiResult.extracted_profile && Object.keys(aiResult.extracted_profile).length > 0) {
+                    const updatedProfile = { ...(conv.client_profile || {}), ...aiResult.extracted_profile };
+                    await supabase.from('conversations').update({ client_profile: updatedProfile }).eq('id', conv.id);
+                    conv.client_profile = updatedProfile;
+                }
+
+                // Sauvegarde de la réponse de l'assistant
+                await supabase.from('messages').insert([{
+                    conversation_id: conv.id,
+                    sender: 'ai',
+                    content: aiResult.response
+                }]);
+
+                // Gère l'intention
+                await handleIntent(conv.id, imageContext, aiResult);
+
+                // Répondre au client
+                await sendWhatsAppMessage(from, aiResult.response);
+            } else {
+                console.log(`[Media] Mode Conseiller actif. Image enregistrée sans réponse de l'IA.`);
             }
-
-            // Sauvegarde de la réponse de l'assistant
-            await supabase.from('messages').insert([{
-                conversation_id: conv.id,
-                sender: 'ai',
-                content: aiResult.response
-            }]);
-
-            // Gère l'intention
-            await handleIntent(conv.id, imageContext, aiResult);
-
-            // Répondre au client
-            await sendWhatsAppMessage(from, aiResult.response);
 
         } else if (type === 'audio') {
             console.log(`[Media] Envoi du vocal à Whisper...`);
@@ -244,36 +256,40 @@ INSTRUCTION : Affiche TOUTES ces informations extraites au client sous forme de 
             }]);
             if (msgErr) console.error('Erreur sauvegarde message vocal:', msgErr);
 
-            // Traite la transcription comme du texte normal
-            const { data: history } = await supabase
-                .from('messages')
-                .select('sender, content')
-                .eq('conversation_id', conv.id)
-                .order('created_at', { ascending: true })
-                .limit(50);
+            if (isAiEnabled) {
+                // Traite la transcription comme du texte normal
+                const { data: history } = await supabase
+                    .from('messages')
+                    .select('sender, content')
+                    .eq('conversation_id', conv.id)
+                    .order('created_at', { ascending: true })
+                    .limit(50);
 
-            const aiResult = await getAIResponse(transcription, history || [], conv.client_profile);
+                const aiResult = await getAIResponse(transcription, history || [], conv.client_profile);
 
-            // Mise à jour du profil client si nécessaire
-            if (aiResult.extracted_profile && Object.keys(aiResult.extracted_profile).length > 0) {
-                const updatedProfile = { ...(conv.client_profile || {}), ...aiResult.extracted_profile };
-                await supabase.from('conversations').update({ client_profile: updatedProfile }).eq('id', conv.id);
-                conv.client_profile = updatedProfile;
+                // Mise à jour du profil client si nécessaire
+                if (aiResult.extracted_profile && Object.keys(aiResult.extracted_profile).length > 0) {
+                    const updatedProfile = { ...(conv.client_profile || {}), ...aiResult.extracted_profile };
+                    await supabase.from('conversations').update({ client_profile: updatedProfile }).eq('id', conv.id);
+                    conv.client_profile = updatedProfile;
+                }
+
+                // Sauvegarde la réponse AI
+                await supabase.from('messages').insert([{
+                    conversation_id: conv.id,
+                    sender: 'ai',
+                    content: aiResult.response
+                }]);
+
+                // Gère l'intention
+                await handleIntent(conv.id, transcription, aiResult);
+
+                // Répondre à l'utilisateur
+                const replyText = `🎙️ J'ai bien entendu votre message : "${transcription.substring(0, 80)}..."\n\n${aiResult.response}`;
+                await sendWhatsAppMessage(from, replyText);
+            } else {
+                console.log(`[Media] Mode Conseiller actif. Vocal enregistré sans réponse de l'IA.`);
             }
-
-            // Sauvegarde la réponse AI
-            await supabase.from('messages').insert([{
-                conversation_id: conv.id,
-                sender: 'ai',
-                content: aiResult.response
-            }]);
-
-            // Gère l'intention
-            await handleIntent(conv.id, transcription, aiResult);
-
-            // Répondre à l'utilisateur
-            const replyText = `🎙️ J'ai bien entendu votre message : "${transcription.substring(0, 80)}..."\n\n${aiResult.response}`;
-            await sendWhatsAppMessage(from, replyText);
 
         } else if (type === 'document') {
             console.log('Type message reçu:', message.type);
@@ -319,18 +335,24 @@ INSTRUCTION : Affiche TOUTES ces informations extraites au client sous forme de 
                     media_description: summary
                 }]);
 
-                // Répondre au client
-                await sendWhatsAppMessage(from, `📄 Document reçu et analysé :\n\n${summary}`);
+                if (isAiEnabled) {
+                    // Répondre au client
+                    await sendWhatsAppMessage(from, `📄 Document reçu et analysé :\n\n${summary}`);
 
-                // Sauvegarde de la réponse AI
-                await supabase.from('messages').insert([{
-                    conversation_id: conv.id,
-                    sender: 'ai',
-                    content: `Document analysé : ${summary}`
-                }]);
+                    // Sauvegarde de la réponse AI
+                    await supabase.from('messages').insert([{
+                        conversation_id: conv.id,
+                        sender: 'ai',
+                        content: `Document analysé : ${summary}`
+                    }]);
+                } else {
+                    console.log(`[Media] Mode Conseiller actif. Document enregistré sans réponse de l'IA.`);
+                }
             } else {
                 console.log(`[Media] Format de document non pris en charge`);
-                await sendWhatsAppMessage(from, `❌ Désolé, le format de ce document n'est pas pris en charge.`);
+                if (isAiEnabled) {
+                    await sendWhatsAppMessage(from, `❌ Désolé, le format de ce document n'est pas pris en charge.`);
+                }
             }
         }
     } else {
@@ -340,35 +362,39 @@ INSTRUCTION : Affiche TOUTES ces informations extraites au client sous forme de 
         ]);
         if (msgError) console.error('Erreur sauvegarde message utilisateur:', msgError);
 
-        // 3. Get Chat History for Context
-        const { data: history } = await supabase
-            .from('messages')
-            .select('sender, content')
-            .eq('conversation_id', conv.id)
-            .order('created_at', { ascending: true })
-            .limit(50);
+        if (isAiEnabled) {
+            // 3. Get Chat History for Context
+            const { data: history } = await supabase
+                .from('messages')
+                .select('sender, content')
+                .eq('conversation_id', conv.id)
+                .order('created_at', { ascending: true })
+                .limit(50);
 
-        // 4. Get AI Response and Intent
-        const aiResult = await getAIResponse(msgBody, history || [], conv.client_profile);
+            // 4. Get AI Response and Intent
+            const aiResult = await getAIResponse(msgBody, history || [], conv.client_profile);
 
-        // Mise à jour du profil client si nécessaire
-        if (aiResult.extracted_profile && Object.keys(aiResult.extracted_profile).length > 0) {
-            const updatedProfile = { ...(conv.client_profile || {}), ...aiResult.extracted_profile };
-            await supabase.from('conversations').update({ client_profile: updatedProfile }).eq('id', conv.id);
-            conv.client_profile = updatedProfile;
+            // Mise à jour du profil client si nécessaire
+            if (aiResult.extracted_profile && Object.keys(aiResult.extracted_profile).length > 0) {
+                const updatedProfile = { ...(conv.client_profile || {}), ...aiResult.extracted_profile };
+                await supabase.from('conversations').update({ client_profile: updatedProfile }).eq('id', conv.id);
+                conv.client_profile = updatedProfile;
+            }
+
+            // 5. Save Bot Message
+            const { error: aiMsgError } = await supabase.from('messages').insert([
+                { conversation_id: conv.id, sender: 'ai', content: aiResult.response }
+            ]);
+            if (aiMsgError) console.error('Erreur sauvegarde message AI:', aiMsgError);
+
+            // 6. Intent-specific handling
+            await handleIntent(conv.id, msgBody, aiResult);
+
+            // 7. Send message back to WhatsApp
+            await sendWhatsAppMessage(from, aiResult.response);
+        } else {
+            console.log(`[Text] Mode Conseiller actif. Message utilisateur enregistré sans réponse de l'IA.`);
         }
-
-        // 5. Save Bot Message
-        const { error: aiMsgError } = await supabase.from('messages').insert([
-            { conversation_id: conv.id, sender: 'ai', content: aiResult.response }
-        ]);
-        if (aiMsgError) console.error('Erreur sauvegarde message AI:', aiMsgError);
-
-        // 6. Intent-specific handling
-        await handleIntent(conv.id, msgBody, aiResult);
-
-        // 7. Send message back to WhatsApp
-        await sendWhatsAppMessage(from, aiResult.response);
     }
 
     // 8. Update last interaction
@@ -392,26 +418,27 @@ async function handleIntent(convId, msgBody, aiResult) {
     else if (aiResult.action === 'cancel') status = 'cancelled';
 
     if (aiResult.intent === 'claim') {
-        console.log(`[Intent] Recherche d'un sinistre en attente...`);
+        console.log(`[Intent] Recherche d'un sinistre 'pending' ou 'in_progress'...`);
         const { data: existingClaims } = await supabase
             .from('claims')
             .select('id, details')
             .eq('conversation_id', convId)
-            .eq('status', 'pending')
+            .in('status', ['pending', 'in_progress'])
             .order('created_at', { ascending: false })
             .limit(1);
 
         const existingClaim = existingClaims && existingClaims.length > 0 ? existingClaims[0] : null;
 
         if (existingClaim) {
-            const mergedDetails = { ...existingClaim.details, ...aiResult.data };
+            const mergedDetails = { ...(existingClaim.details || {}), ...(aiResult.data || {}) };
             if (!mergedDetails.description && msgBody) mergedDetails.description = msgBody;
             
             await supabase.from('claims').update({
                 details: mergedDetails,
                 status: status
             }).eq('id', existingClaim.id);
-        } else if (status === 'pending') {
+            console.log(`[Intent] Sinistre existant mis à jour : ${existingClaim.id}`);
+        } else {
             const details = aiResult.data || {};
             if (!details.description && msgBody) details.description = msgBody;
 
@@ -419,39 +446,42 @@ async function handleIntent(convId, msgBody, aiResult) {
                 conversation_id: convId, 
                 user_phone: userPhone,
                 details: details,
-                status: 'pending'
+                status: status
             };
             await supabase.from('claims').insert([newClaim]);
+            console.log(`[Intent] Nouveau sinistre créé avec statut: ${status}`);
         }
     } else if (aiResult.intent === 'quote') {
-        console.log(`[Intent] Recherche d'un devis en attente...`);
+        console.log(`[Intent] Recherche d'un devis 'pending' ou 'in_progress'...`);
         const { data: existingQuotes } = await supabase
             .from('quotes')
             .select('id, details')
             .eq('conversation_id', convId)
-            .eq('status', 'pending')
+            .in('status', ['pending', 'in_progress'])
             .order('created_at', { ascending: false })
             .limit(1);
 
         const existingQuote = existingQuotes && existingQuotes.length > 0 ? existingQuotes[0] : null;
 
         if (existingQuote) {
-            const mergedDetails = { ...existingQuote.details, ...aiResult.data };
+            const mergedDetails = { ...(existingQuote.details || {}), ...(aiResult.data || {}) };
             const updatedQuote = {
                 insurance_type: aiResult.data.insurance_type || aiResult.data.type || 'auto',
                 details: mergedDetails,
                 status: status
             };
             await supabase.from('quotes').update(updatedQuote).eq('id', existingQuote.id);
-        } else if (status === 'pending') {
+            console.log(`[Intent] Devis existant mis à jour : ${existingQuote.id}`);
+        } else {
             const newQuote = { 
                 conversation_id: convId, 
                 user_phone: userPhone,
                 insurance_type: aiResult.data.insurance_type || aiResult.data.type || 'auto',
                 details: aiResult.data || {},
-                status: 'pending'
+                status: status
             };
             await supabase.from('quotes').insert([newQuote]);
+            console.log(`[Intent] Nouveau devis créé avec statut: ${status}`);
         }
     }
 }

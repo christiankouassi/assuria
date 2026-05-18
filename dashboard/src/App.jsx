@@ -34,6 +34,14 @@ function App() {
   const [unreadCounts, setUnreadCounts] = useState({});
   const [clientFiles, setClientFiles] = useState([]);
   const [copiedId, setCopiedId] = useState(null);
+  const [expandedClients, setExpandedClients] = useState({});
+  const [fileFilterClient, setFileFilterClient] = useState(null);
+  const [dossierFilterClient, setDossierFilterClient] = useState(null);
+  const [showNewPolicyModal, setShowNewPolicyModal] = useState(false);
+  const [newPolicyPhone, setNewPolicyPhone] = useState('');
+  const [newPolicyType, setNewPolicyType] = useState('quote');
+  const [newPolicyDetails, setNewPolicyDetails] = useState('');
+  const [isSubmittingPolicy, setIsSubmittingPolicy] = useState(false);
   const audioRef = useRef(typeof Audio !== "undefined" ? new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3') : null);
 
   useEffect(() => {
@@ -49,6 +57,54 @@ function App() {
       return format(d, formatPattern, options);
     } catch (e) {
       console.warn("Date formatting error:", e);
+      return '';
+    }
+  };
+
+  const formatConversationDate = (dateStr) => {
+    if (!dateStr) return '';
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return '';
+      const now = new Date();
+      const diffMs = now.getTime() - d.getTime();
+      const diffMins = Math.floor(diffMs / 60000);
+      
+      // Moins de 1 heure
+      if (diffMins < 60) {
+        if (diffMins < 1) return "À l'instant";
+        return `il y a ${diffMins} min`;
+      }
+      
+      // Aujourd'hui (même jour)
+      const isToday = d.getDate() === now.getDate() &&
+                      d.getMonth() === now.getMonth() &&
+                      d.getFullYear() === now.getFullYear();
+      if (isToday) {
+        return format(d, 'HH:mm');
+      }
+      
+      // Hier (jour précédent)
+      const yesterday = new Date(now);
+      yesterday.setDate(now.getDate() - 1);
+      const isYesterday = d.getDate() === yesterday.getDate() &&
+                          d.getMonth() === yesterday.getMonth() &&
+                          d.getFullYear() === yesterday.getFullYear();
+      if (isYesterday) {
+        return 'Hier';
+      }
+      
+      // Moins de 7 jours (diffDays < 7)
+      const diffDays = Math.floor(diffMs / 86400000);
+      if (diffDays < 7) {
+        const dayName = format(d, 'EEEE', { locale: fr });
+        return dayName.charAt(0).toUpperCase() + dayName.slice(1);
+      }
+      
+      // Plus de 7 jours
+      return format(d, 'dd/MM/yyyy');
+    } catch (e) {
+      console.warn("formatConversationDate error:", e);
       return '';
     }
   };
@@ -291,6 +347,125 @@ function App() {
   const handleSelectConversation = (conv) => {
     setSelectedConversation(conv);
     fetchMessages(conv.id);
+    setAiMode(conv.client_profile?.ai_mode !== false);
+  };
+
+  const handleToggleAiMode = async (enabled) => {
+    if (!selectedConversation) return;
+    setAiMode(enabled);
+
+    const updatedProfile = {
+      ...(selectedConversation.client_profile || {}),
+      ai_mode: enabled
+    };
+
+    try {
+      const { error } = await supabase
+        .from('conversations')
+        .update({ client_profile: updatedProfile })
+        .eq('id', selectedConversation.id);
+
+      if (error) {
+        console.error("Erreur de mise à jour du Mode IA:", error);
+      } else {
+        setSelectedConversation(prev => ({
+          ...prev,
+          client_profile: updatedProfile
+        }));
+        setData(prev => ({
+          ...prev,
+          conversations: prev.conversations.map(c => 
+            c.id === selectedConversation.id 
+              ? { ...c, client_profile: updatedProfile } 
+              : c
+          )
+        }));
+      }
+    } catch (err) {
+      console.error("Erreur de mise à jour du Mode IA:", err);
+    }
+  };
+
+  const handleCreateNewPolicy = async (e) => {
+    e.preventDefault();
+    if (!newPolicyPhone.trim() || !newPolicyDetails.trim()) {
+      alert("Veuillez remplir tous les champs");
+      return;
+    }
+
+    setIsSubmittingPolicy(true);
+    const cleanPhone = newPolicyPhone.replace('+', '').trim();
+
+    try {
+      // 1. Get or create conversation
+      let { data: conv, error: convErr } = await supabase
+        .from('conversations')
+        .select('id, client_profile')
+        .eq('user_identifier', cleanPhone)
+        .maybeSingle();
+
+      let conversationId;
+      if (convErr || !conv) {
+        const { data: newConv, error: createError } = await supabase
+          .from('conversations')
+          .insert([{ 
+            user_identifier: cleanPhone, 
+            platform: 'whatsapp', 
+            client_profile: {} 
+          }])
+          .select()
+          .single();
+        
+        if (createError) throw createError;
+        conversationId = newConv.id;
+      } else {
+        conversationId = conv.id;
+      }
+
+      // 2. Insert quote or claim
+      const detailsObj = { user_input: newPolicyDetails };
+      if (newPolicyType === 'quote') {
+        const { error: quoteErr } = await supabase
+          .from('quotes')
+          .insert([{
+            conversation_id: conversationId,
+            status: 'pending',
+            insurance_type: 'auto',
+            details: detailsObj
+          }]);
+        if (quoteErr) throw quoteErr;
+      } else {
+        const { error: claimErr } = await supabase
+          .from('claims')
+          .insert([{
+            conversation_id: conversationId,
+            status: 'pending',
+            description: newPolicyDetails,
+            details: detailsObj
+          }]);
+        if (claimErr) throw claimErr;
+      }
+
+      alert(`Dossier ${newPolicyType === 'quote' ? 'Devis' : 'Sinistre'} créé avec succès !`);
+      
+      // Close modal and reset fields
+      setShowNewPolicyModal(false);
+      setNewPolicyPhone('');
+      setNewPolicyDetails('');
+      setNewPolicyType('quote');
+
+      // Refresh everything
+      await fetchData();
+
+      // Redirect to the appropriate tab to show the new item
+      setActiveTab(newPolicyType === 'quote' ? 'quotes' : 'claims');
+
+    } catch (err) {
+      console.error("Erreur de création de dossier:", err);
+      alert("Une erreur s'est produite lors de la création du dossier.");
+    } finally {
+      setIsSubmittingPolicy(false);
+    }
   };
 
   const handleSendMessage = async (e) => {
@@ -397,6 +572,7 @@ function App() {
       unreadCounts={{ messages: Object.values(unreadCounts).reduce((a, b) => a + b, 0) }}
       notificationsCount={notifications.filter(n => !n.read).length}
       toggleNotifications={() => setShowNotifications(!showNotifications)}
+      onNewPolicy={() => setShowNewPolicyModal(true)}
     >
       <div className={`content-area ${activeTab === 'conversations' ? 'h-full flex flex-col overflow-hidden flex-1' : ''}`}>
           {activeTab === 'dashboard' ? (
@@ -523,7 +699,7 @@ function App() {
                             </div>
                           </div>
                           <div className="text-right flex-shrink-0">
-                            <p className="text-error font-bold text-body-md m-0">{safeFormat(conv.last_message.created_at, 'HH:mm')}</p>
+                            <p className="text-error font-bold text-body-md m-0">{formatConversationDate(conv.last_message.created_at)}</p>
                             <p className="text-[10px] uppercase tracking-wider text-error/60 m-0">En attente</p>
                           </div>
                         </div>
@@ -570,7 +746,7 @@ function App() {
                               +{conv.user_identifier}
                             </h3>
                             <span className="text-[10px] text-on-surface-variant font-medium">
-                              {conv.last_message ? safeFormat(conv.last_message.created_at, 'HH:mm') : ''}
+                              {conv.last_message ? formatConversationDate(conv.last_message.created_at) : ''}
                             </span>
                           </div>
                           <p className={`text-body-sm truncate ${selectedConversation?.id === conv.id ? 'text-primary font-medium' : 'text-on-surface-variant'}`}>
@@ -612,14 +788,14 @@ function App() {
                       <div className="flex items-center bg-surface-container-high rounded-full p-1 border border-outline-variant">
                         <button 
                           className={`flex items-center gap-2 px-4 py-1.5 rounded-full font-bold text-body-sm transition-all ${aiMode ? 'bg-primary text-on-primary-container shadow-sm' : 'text-on-surface-variant hover:text-on-surface'}`}
-                          onClick={() => setAiMode(true)}
+                          onClick={() => handleToggleAiMode(true)}
                         >
                           <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: aiMode ? "'FILL' 1" : "'FILL' 0" }}>smart_toy</span>
                           Mode IA
                         </button>
                         <button 
                           className={`flex items-center gap-2 px-4 py-1.5 rounded-full font-bold text-body-sm transition-all ${!aiMode ? 'bg-primary text-on-primary-container shadow-sm' : 'text-on-surface-variant hover:text-on-surface'}`}
-                          onClick={() => setAiMode(false)}
+                          onClick={() => handleToggleAiMode(false)}
                         >
                           <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: !aiMode ? "'FILL' 1" : "'FILL' 0" }}>person</span>
                           Conseiller
@@ -741,15 +917,28 @@ function App() {
                       {/* Quick Actions */}
                       <div className="space-y-3">
                         <h4 className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">Actions Rapides</h4>
-                        <button className="w-full py-2.5 px-4 rounded-xl border border-outline-variant text-body-sm font-bold hover:bg-surface-container-high transition-colors text-left flex items-center gap-3 text-on-surface">
+                        <button 
+                          onClick={() => {
+                            setDossierFilterClient(selectedConversation.user_identifier);
+                            setActiveTab('quotes');
+                          }}
+                          className="w-full py-2.5 px-4 rounded-xl border border-outline-variant text-body-sm font-bold hover:bg-surface-container-high transition-colors text-left flex items-center gap-3 text-on-surface cursor-pointer"
+                        >
                           <span className="material-symbols-outlined text-[20px]">visibility</span>
                           Voir les dossiers
                         </button>
-                        <button className="w-full py-2.5 px-4 rounded-xl border border-outline-variant text-body-sm font-bold hover:bg-surface-container-high transition-colors text-left flex items-center gap-3 text-on-surface">
-                          <span className="material-symbols-outlined text-[20px]">receipt_long</span>
-                          Envoyer un document
+                        <button 
+                          onClick={() => {
+                            setFileFilterClient(selectedConversation.user_identifier);
+                            setExpandedClients(prev => ({ ...prev, [selectedConversation.user_identifier]: true }));
+                            setActiveTab('files');
+                          }}
+                          className="w-full py-2.5 px-4 rounded-xl border border-outline-variant text-body-sm font-bold hover:bg-surface-container-high transition-colors text-left flex items-center gap-3 text-on-surface cursor-pointer"
+                        >
+                          <span className="material-symbols-outlined text-[20px]">folder_shared</span>
+                          Voir documents
                         </button>
-                        <button className="w-full py-2.5 px-4 rounded-xl border border-error/20 text-error text-body-sm font-bold hover:bg-error/5 transition-colors text-left flex items-center gap-3">
+                        <button className="w-full py-2.5 px-4 rounded-xl border border-error/20 text-error text-body-sm font-bold hover:bg-error/5 transition-colors text-left flex items-center gap-3 cursor-pointer">
                           <span className="material-symbols-outlined text-[20px]">block</span>
                           Fermer la session
                         </button>
@@ -777,253 +966,480 @@ function App() {
               })()}
             </div>
 
-          ) : activeTab === 'claims' ? (
-            <div className="flex flex-col gap-6 p-lg h-full overflow-y-auto custom-scrollbar">
-              <div className="flex justify-between items-center">
-                <h2 className="font-headline-md text-[24px] text-on-surface m-0">Gestion des Sinistres</h2>
-                <button onClick={exportClaims} className="flex items-center gap-2 px-4 py-2 bg-primary text-on-primary-container rounded-xl font-bold hover:scale-105 active:scale-95 transition-all shadow-md">
-                  <span className="material-symbols-outlined text-[18px]">download</span>
-                  Exporter (Excel)
-                </button>
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <StatCard label="Total Sinistres" value={claimStats.total} icon="description" />
-                <StatCard label="Nouveaux" value={claimStats.new} icon="fiber_new" color="text-primary" />
-                <StatCard label="En cours" value={claimStats.processing} icon="hourglass_empty" color="text-[#FFC107]" />
-                <StatCard label="Clôturés" value={claimStats.resolved} icon="check_circle" color="text-error" />
-              </div>
+          ) : activeTab === 'claims' ? (() => {
+            const filteredClaims = dossierFilterClient 
+              ? data.claims.filter(c => c.conversations?.user_identifier === dossierFilterClient)
+              : data.claims;
+            return (
+              <div className="flex flex-col gap-6 p-lg h-full overflow-y-auto custom-scrollbar">
+                <div className="flex justify-between items-center">
+                  <h2 className="font-headline-md text-[24px] text-on-surface m-0">Gestion des Sinistres</h2>
+                  <button onClick={exportClaims} className="flex items-center gap-2 px-4 py-2 bg-primary text-on-primary-container rounded-xl font-bold hover:scale-105 active:scale-95 transition-all shadow-md cursor-pointer">
+                    <span className="material-symbols-outlined text-[18px]">download</span>
+                    Exporter (Excel)
+                  </button>
+                </div>
 
-              <div className="glass-panel p-md">
-                <div className="overflow-x-auto rounded-xl border border-outline-variant bg-surface-container-low/50">
-                  <table className="w-full text-left text-body-md text-on-surface">
-                    <thead className="bg-surface-container border-b border-outline-variant text-on-surface-variant font-bold">
-                      <tr>
-                        <th className="px-6 py-4 font-medium">Référence</th>
-                        <th className="px-6 py-4 font-medium">Client</th>
-                        <th className="px-6 py-4 font-medium">Statut</th>
-                        <th className="px-6 py-4 font-medium">Description</th>
-                        <th className="px-6 py-4 font-medium">Date</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-outline-variant">
-                      {data.claims.map(claim => (
-                        <tr key={claim.id} className="hover:bg-surface-container-high transition-colors">
-                          <td className="px-6 py-4 font-bold">#{claim.id.slice(0, 8)}</td>
-                          <td className="px-6 py-4">+{claim.conversations?.user_identifier}</td>
-                          <td className="px-6 py-4">
-                            <span className={`px-3 py-1 rounded-full text-[12px] font-bold tracking-wide ${claim.status === 'resolved' ? 'bg-error/20 text-error border border-error/30' : claim.status === 'processing' ? 'bg-[#FFC107]/20 text-[#FFC107] border border-[#FFC107]/30' : 'bg-primary/20 text-primary border border-primary/30'}`}>
-                              {claim.status}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 text-[14px] max-w-[350px]">
-                            <div className={claim.media_urls?.length ? 'mb-2' : ''}>
-                              {claim.description || "Détails non fournis"}
-                            </div>
-                            {claim.media_urls && claim.media_urls.length > 0 && (
-                              <div className="flex gap-2 flex-wrap">
-                                {claim.media_urls.map((media, idx) => (
-                                  media.url && (
-                                    <div key={idx} className="relative">
-                                      {media.type?.startsWith('audio/') ? (
-                                        <audio src={media.url} controls className="w-32 scale-75 origin-left" />
-                                      ) : media.type?.startsWith('image/') || !media.type ? (
-                                        <img 
-                                          src={media.url}
-                                          alt={media.description || "Media"}
-                                          className="w-12 h-12 rounded-lg object-cover cursor-pointer border border-outline-variant shadow-md"
-                                          onClick={() => setLightboxMedia(media)}
-                                        />
-                                      ) : (
-                                        <a href={media.url} target="_blank" rel="noreferrer" className="glass-panel text-[11px] px-2 py-1 rounded flex items-center gap-1 no-underline text-on-surface hover:text-primary transition-colors">
-                                          Doc
-                                        </a>
-                                      )}
-                                    </div>
-                                  )
-                                ))}
+                {dossierFilterClient && (
+                  <div className="flex items-center justify-between p-md rounded-2xl bg-primary/10 border border-primary/20 text-primary">
+                    <div className="flex items-center gap-3">
+                      <span className="material-symbols-outlined">filter_list</span>
+                      <span className="font-bold text-body-sm">
+                        Filtre actif pour le client : <span className="underline">+{dossierFilterClient}</span>
+                      </span>
+                    </div>
+                    <button 
+                      onClick={() => setDossierFilterClient(null)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-on-primary font-bold rounded-xl text-body-sm shadow-md hover:scale-105 active:scale-95 transition-all cursor-pointer border-none"
+                    >
+                      <span className="material-symbols-outlined text-[16px]">close</span>
+                      Effacer le filtre
+                    </button>
+                  </div>
+                )}
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <StatCard label="Total Sinistres" value={claimStats.total} icon="description" />
+                  <StatCard label="Nouveaux" value={claimStats.new} icon="fiber_new" color="text-primary" />
+                  <StatCard label="En cours" value={claimStats.processing} icon="hourglass_empty" color="text-[#FFC107]" />
+                  <StatCard label="Clôturés" value={claimStats.resolved} icon="check_circle" color="text-error" />
+                </div>
+
+                <div className="glass-panel p-md">
+                  <div className="overflow-x-auto rounded-xl border border-outline-variant bg-surface-container-low/50">
+                    <table className="w-full text-left text-body-md text-on-surface">
+                      <thead className="bg-surface-container border-b border-outline-variant text-on-surface-variant font-bold">
+                        <tr>
+                          <th className="px-6 py-4 font-medium">Référence</th>
+                          <th className="px-6 py-4 font-medium">Client</th>
+                          <th className="px-6 py-4 font-medium">Statut</th>
+                          <th className="px-6 py-4 font-medium">Description</th>
+                          <th className="px-6 py-4 font-medium">Date</th>
+                          <th className="px-6 py-4 font-medium">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-outline-variant">
+                        {filteredClaims.map(claim => (
+                          <tr key={claim.id} className="hover:bg-surface-container-high transition-colors">
+                            <td className="px-6 py-4 font-bold">#{claim.id.slice(0, 8)}</td>
+                            <td className="px-6 py-4">+{claim.conversations?.user_identifier}</td>
+                            <td className="px-6 py-4">
+                              <span className={`px-3 py-1 rounded-full text-[12px] font-bold tracking-wide ${claim.status === 'resolved' ? 'bg-error/20 text-error border border-error/30' : claim.status === 'processing' ? 'bg-[#FFC107]/20 text-[#FFC107] border border-[#FFC107]/30' : 'bg-primary/20 text-primary border border-primary/30'}`}>
+                                {claim.status}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 text-[14px] max-w-[350px]">
+                              <div className={claim.media_urls?.length ? 'mb-2' : ''}>
+                                {claim.description || "Détails non fournis"}
                               </div>
-                            )}
-                          </td>
-                          <td className="px-6 py-4 text-on-surface-variant text-sm">
-                            {safeFormat(claim.created_at, 'd MMM yyyy', { locale: fr })}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                              {claim.media_urls && claim.media_urls.length > 0 && (
+                                <div className="flex gap-2 flex-wrap">
+                                  {claim.media_urls.map((media, idx) => (
+                                    media.url && (
+                                      <div key={idx} className="relative">
+                                        {media.type?.startsWith('audio/') ? (
+                                          <audio src={media.url} controls className="w-32 scale-75 origin-left" />
+                                        ) : media.type?.startsWith('image/') || !media.type ? (
+                                          <img 
+                                            src={media.url}
+                                            alt={media.description || "Media"}
+                                            className="w-12 h-12 rounded-lg object-cover cursor-pointer border border-outline-variant shadow-md"
+                                            onClick={() => setLightboxMedia(media)}
+                                          />
+                                        ) : (
+                                          <a href={media.url} target="_blank" rel="noreferrer" className="glass-panel text-[11px] px-2 py-1 rounded flex items-center gap-1 no-underline text-on-surface hover:text-primary transition-colors">
+                                            Doc
+                                          </a>
+                                        )}
+                                      </div>
+                                    )
+                                  ))}
+                                </div>
+                              )}
+                            </td>
+                            <td className="px-6 py-4 text-on-surface-variant text-sm">
+                              {safeFormat(claim.created_at, 'd MMM yyyy', { locale: fr })}
+                            </td>
+                            <td className="px-6 py-4">
+                              <button 
+                                onClick={() => {
+                                  const phone = claim.conversations?.user_identifier;
+                                  const conv = data.conversations.find(c => c.user_identifier === phone);
+                                  if (conv) {
+                                    handleSelectConversation(conv);
+                                  }
+                                  setActiveTab('conversations');
+                                }}
+                                className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 active:scale-95 transition-all text-[12px] font-bold rounded-lg cursor-pointer"
+                              >
+                                <span className="material-symbols-outlined text-[16px]">chat</span>
+                                Voir discussion
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
-            </div>
-          ) : activeTab === 'quotes' ? (
-            <div className="flex flex-col gap-6 p-lg h-full overflow-y-auto custom-scrollbar">
-              <div className="flex justify-between items-center">
-                <h2 className="font-headline-md text-[24px] text-on-surface m-0">Gestion des Devis</h2>
-                <button onClick={exportQuotes} className="flex items-center gap-2 px-4 py-2 bg-primary text-on-primary-container rounded-xl font-bold hover:scale-105 active:scale-95 transition-all shadow-md">
-                  <span className="material-symbols-outlined text-[18px]">download</span>
-                  Exporter (Excel)
-                </button>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <StatCard label="Total Devis" value={quoteStats.total} icon="request_quote" />
-                <StatCard label="Nouveaux" value={quoteStats.new} icon="fiber_new" color="text-primary" />
-                <StatCard label="Envoyés" value={quoteStats.sent} icon="send" color="text-[#FFC107]" />
-                <StatCard label="Acceptés" value={quoteStats.accepted} icon="thumb_up" color="text-error" />
-              </div>
-              <div className="glass-panel p-md">
-                <div className="overflow-x-auto rounded-xl border border-outline-variant bg-surface-container-low/50">
-                  <table className="w-full text-left text-body-md text-on-surface">
-                    <thead className="bg-surface-container border-b border-outline-variant text-on-surface-variant font-bold">
-                      <tr>
-                        <th className="px-6 py-4 font-medium">Référence</th>
-                        <th className="px-6 py-4 font-medium">Client</th>
-                        <th className="px-6 py-4 font-medium">Type</th>
-                        <th className="px-6 py-4 font-medium">Statut</th>
-                        <th className="px-6 py-4 font-medium">Date</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-outline-variant">
-                      {data.quotes.map(quote => (
-                        <tr key={quote.id} className="hover:bg-surface-container-high transition-colors">
-                          <td className="px-6 py-4 font-bold">#{quote.id.slice(0, 8)}</td>
-                          <td className="px-6 py-4">+{quote.conversations?.user_identifier}</td>
-                          <td className="px-6 py-4">{quote.insurance_type?.toUpperCase()}</td>
-                          <td className="px-6 py-4">
-                            <span className={`px-3 py-1 rounded-full text-[12px] font-bold tracking-wide ${quote.status === 'sent' ? 'bg-[#FFC107]/20 text-[#FFC107] border border-[#FFC107]/30' : quote.status === 'accepted' ? 'bg-error/20 text-error border border-error/30' : 'bg-primary/20 text-primary border border-primary/30'}`}>
-                              {quote.status}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 text-on-surface-variant text-sm">
-                            {safeFormat(quote.created_at, 'd MMM yyyy', { locale: fr })}
-                          </td>
+            );
+          })()
+          ) : activeTab === 'quotes' ? (() => {
+            const filteredQuotes = dossierFilterClient 
+              ? data.quotes.filter(q => q.conversations?.user_identifier === dossierFilterClient)
+              : data.quotes;
+            return (
+              <div className="flex flex-col gap-6 p-lg h-full overflow-y-auto custom-scrollbar">
+                <div className="flex justify-between items-center">
+                  <h2 className="font-headline-md text-[24px] text-on-surface m-0">Gestion des Devis</h2>
+                  <button onClick={exportQuotes} className="flex items-center gap-2 px-4 py-2 bg-primary text-on-primary-container rounded-xl font-bold hover:scale-105 active:scale-95 transition-all shadow-md cursor-pointer">
+                    <span className="material-symbols-outlined text-[18px]">download</span>
+                    Exporter (Excel)
+                  </button>
+                </div>
+
+                {dossierFilterClient && (
+                  <div className="flex items-center justify-between p-md rounded-2xl bg-primary/10 border border-primary/20 text-primary">
+                    <div className="flex items-center gap-3">
+                      <span className="material-symbols-outlined">filter_list</span>
+                      <span className="font-bold text-body-sm">
+                        Filtre actif pour le client : <span className="underline">+{dossierFilterClient}</span>
+                      </span>
+                    </div>
+                    <button 
+                      onClick={() => setDossierFilterClient(null)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-on-primary font-bold rounded-xl text-body-sm shadow-md hover:scale-105 active:scale-95 transition-all cursor-pointer border-none"
+                    >
+                      <span className="material-symbols-outlined text-[16px]">close</span>
+                      Effacer le filtre
+                    </button>
+                  </div>
+                )}
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <StatCard label="Total Devis" value={quoteStats.total} icon="request_quote" />
+                  <StatCard label="Nouveaux" value={quoteStats.new} icon="fiber_new" color="text-primary" />
+                  <StatCard label="Envoyés" value={quoteStats.sent} icon="send" color="text-[#FFC107]" />
+                  <StatCard label="Acceptés" value={quoteStats.accepted} icon="thumb_up" color="text-error" />
+                </div>
+                <div className="glass-panel p-md">
+                  <div className="overflow-x-auto rounded-xl border border-outline-variant bg-surface-container-low/50">
+                    <table className="w-full text-left text-body-md text-on-surface">
+                      <thead className="bg-surface-container border-b border-outline-variant text-on-surface-variant font-bold">
+                        <tr>
+                          <th className="px-6 py-4 font-medium">Référence</th>
+                          <th className="px-6 py-4 font-medium">Client</th>
+                          <th className="px-6 py-4 font-medium">Type</th>
+                          <th className="px-6 py-4 font-medium">Statut</th>
+                          <th className="px-6 py-4 font-medium">Date</th>
+                          <th className="px-6 py-4 font-medium">Actions</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody className="divide-y divide-outline-variant">
+                        {filteredQuotes.map(quote => (
+                          <tr key={quote.id} className="hover:bg-surface-container-high transition-colors">
+                            <td className="px-6 py-4 font-bold">#{quote.id.slice(0, 8)}</td>
+                            <td className="px-6 py-4">+{quote.conversations?.user_identifier}</td>
+                            <td className="px-6 py-4">{quote.insurance_type?.toUpperCase()}</td>
+                            <td className="px-6 py-4">
+                              <span className={`px-3 py-1 rounded-full text-[12px] font-bold tracking-wide ${quote.status === 'sent' ? 'bg-[#FFC107]/20 text-[#FFC107] border border-[#FFC107]/30' : quote.status === 'accepted' ? 'bg-error/20 text-error border border-error/30' : 'bg-primary/20 text-primary border border-primary/30'}`}>
+                                {quote.status}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 text-on-surface-variant text-sm">
+                              {safeFormat(quote.created_at, 'd MMM yyyy', { locale: fr })}
+                            </td>
+                            <td className="px-6 py-4">
+                              <button 
+                                onClick={() => {
+                                  const phone = quote.conversations?.user_identifier;
+                                  const conv = data.conversations.find(c => c.user_identifier === phone);
+                                  if (conv) {
+                                    handleSelectConversation(conv);
+                                  }
+                                  setActiveTab('conversations');
+                                }}
+                                className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 active:scale-95 transition-all text-[12px] font-bold rounded-lg cursor-pointer"
+                              >
+                                <span className="material-symbols-outlined text-[16px]">chat</span>
+                                Voir discussion
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
-            </div>
+            );
+          })()
           ) : activeTab === 'files' ? (
             <div className="flex flex-col gap-6 p-lg h-full overflow-y-auto custom-scrollbar">
               <div className="flex justify-between items-center">
-                <h2 className="font-headline-md text-[24px] text-on-surface m-0">Fichiers clients</h2>
-                <span className="text-[14px] text-on-surface-variant font-medium">
-                  {clientFiles.length} fichier(s) trouvé(s)
-                </span>
+                <div>
+                  <h2 className="font-headline-md text-[24px] text-on-surface m-0">Fichiers clients</h2>
+                  <p className="text-body-sm text-on-surface-variant m-0 mt-1">
+                    Retrouvez tous les documents partagés par vos clients classés par dossiers de conversation.
+                  </p>
+                </div>
+                <div className="flex items-center gap-3">
+                  {fileFilterClient && (
+                    <button 
+                      onClick={() => setFileFilterClient(null)} 
+                      className="flex items-center gap-2 px-3 py-1.5 bg-error/15 text-error border border-error/20 rounded-lg text-body-sm font-bold hover:bg-error/20 transition-all"
+                    >
+                      <span className="material-symbols-outlined text-[16px]">close</span>
+                      Filtre : +{fileFilterClient} (Effacer)
+                    </button>
+                  )}
+                  <span className="text-[14px] text-on-surface-variant font-medium bg-surface-container px-3 py-1.5 rounded-lg border border-outline-variant">
+                    {clientFiles.length} fichier(s) au total
+                  </span>
+                </div>
               </div>
 
-              <div className="glass-panel p-md">
-                <div className="overflow-x-auto rounded-xl border border-outline-variant bg-surface-container-low/50">
-                  <table className="w-full text-left text-body-md text-on-surface">
-                    <thead className="bg-surface-container border-b border-outline-variant text-on-surface-variant font-bold">
-                      <tr>
-                        <th className="px-6 py-4 font-medium">Client</th>
-                        <th className="px-6 py-4 font-medium">Type</th>
-                        <th className="px-6 py-4 font-medium">Aperçu</th>
-                        <th className="px-6 py-4 font-medium">Date</th>
-                        <th className="px-6 py-4 font-medium">Transcription / Description</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-outline-variant">
-                      {clientFiles.length === 0 ? (
-                        <tr>
-                          <td colSpan="5" className="px-6 py-8 text-center text-on-surface-variant">
-                            Aucun fichier média reçu pour le moment
-                          </td>
-                        </tr>
-                      ) : (
-                        clientFiles.map(file => {
-                          const isImage = file.media_type?.includes('image');
-                          const isAudio = file.media_type?.includes('audio');
-                          const isDoc = file.media_type?.includes('pdf') || file.media_type?.includes('document') || file.media_type?.includes('word') || file.media_type?.includes('officedocument');
-                          
-                          return (
-                            <tr key={file.id} className="hover:bg-surface-container-high transition-colors">
-                              <td className="px-6 py-4 font-bold">
-                                +{file.conversations?.user_identifier || 'Inconnu'}
-                              </td>
-                              <td className="px-6 py-4">
-                                <span className={`inline-block px-3 py-1 rounded-lg text-[11px] font-bold uppercase ${isImage ? 'bg-primary/20 text-primary border border-primary/30' : isAudio ? 'bg-[#FFC107]/20 text-[#FFC107] border border-[#FFC107]/30' : 'bg-error/20 text-error border border-error/30'}`}>
-                                  {isImage ? '📷 Image' : isAudio ? '🎙️ Vocal' : '📄 Document'}
-                                </span>
-                              </td>
-                              <td className="px-6 py-4">
-                                {(() => {
-                                  const srcUrl = getMediaUrl(file.media_url);
-                                  return (
-                                    <>
-                                      {isImage && srcUrl && (
-                                        <img 
-                                          src={srcUrl} 
-                                          alt="Miniature" 
-                                          className="w-12 h-12 rounded-lg object-cover cursor-pointer border border-outline-variant shadow-sm"
-                                          onClick={() => setLightboxMedia({ url: srcUrl, description: file.media_description || file.content })}
-                                        />
-                                      )}
-                                      {isAudio && srcUrl && (
-                                        <div 
-                                          className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer bg-[#FFC107]/20 text-[#FFC107] hover:bg-[#FFC107]/30 transition-colors"
-                                          onClick={() => {
-                                            const audio = new Audio(srcUrl);
-                                            audio.play().catch(e => console.log('Playback failed', e));
-                                          }}
-                                          title="Lire le fichier audio"
-                                        >
-                                          <Play size={18} />
+              <div className="flex flex-col gap-4">
+                {(() => {
+                  // 1. Group files by client
+                  const filesByClient = clientFiles.reduce((acc, file) => {
+                    const clientPhone = file.conversations?.user_identifier || 'Inconnu';
+                    if (!acc[clientPhone]) {
+                      acc[clientPhone] = [];
+                    }
+                    acc[clientPhone].push(file);
+                    return acc;
+                  }, {});
+
+                  // 2. Filter clients if filter is set
+                  const clientPhones = Object.keys(filesByClient).filter(phone => 
+                    !fileFilterClient || phone === fileFilterClient
+                  );
+
+                  if (clientPhones.length === 0) {
+                    return (
+                      <div className="glass-panel p-xl text-center flex flex-col items-center justify-center text-on-surface-variant opacity-70">
+                        <span className="material-symbols-outlined text-5xl mb-sm text-on-surface-variant">folder_open</span>
+                        <p className="m-0 text-body-md font-bold">Aucun dossier de fichiers trouvé</p>
+                        {fileFilterClient && (
+                          <button onClick={() => setFileFilterClient(null)} className="mt-md px-4 py-2 bg-primary text-on-primary rounded-xl font-bold hover:scale-105 transition-all text-body-sm">
+                            Afficher tous les fichiers
+                          </button>
+                        )}
+                      </div>
+                    );
+                  }
+
+                  return clientPhones.map(phone => {
+                    const files = filesByClient[phone] || [];
+                    const isExpanded = !!expandedClients[phone] || fileFilterClient === phone;
+                    
+                    // Categorize files
+                    const images = files.filter(f => f.media_type?.includes('image'));
+                    const audios = files.filter(f => f.media_type?.includes('audio'));
+                    const docs = files.filter(f => !f.media_type?.includes('image') && !f.media_type?.includes('audio'));
+
+                    return (
+                      <div key={phone} className="glass-panel overflow-hidden border border-outline-variant rounded-xl bg-surface-container-low/30 hover:border-primary/30 transition-all">
+                        {/* Accordion Header */}
+                        <button 
+                          onClick={() => setExpandedClients(prev => ({ ...prev, [phone]: !prev[phone] }))}
+                          className="w-full flex items-center justify-between p-lg text-left bg-surface-container-low hover:bg-surface-container-high transition-colors"
+                        >
+                          <div className="flex items-center gap-md">
+                            <div className="w-12 h-12 rounded-full bg-primary/10 text-primary border border-primary/20 flex items-center justify-center">
+                              <span className="material-symbols-outlined text-[24px]">folder_shared</span>
+                            </div>
+                            <div>
+                              <h3 className="font-bold text-headline-sm text-on-surface m-0">+{phone}</h3>
+                              <p className="text-body-sm text-on-surface-variant m-0 mt-0.5">
+                                {files.length} fichier{files.length > 1 ? 's' : ''} partagé{files.length > 1 ? 's' : ''}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-sm">
+                            <span className="text-[12px] font-bold text-primary bg-primary/10 border border-primary/25 px-2.5 py-1 rounded-full uppercase">
+                              {images.length > 0 && '📷 '}
+                              {audios.length > 0 && '🎙️ '}
+                              {docs.length > 0 && '📄'}
+                            </span>
+                            <span className={`material-symbols-outlined transition-transform duration-350 text-on-surface-variant ${isExpanded ? 'rotate-180 text-primary' : ''}`}>
+                              keyboard_arrow_down
+                            </span>
+                          </div>
+                        </button>
+
+                        {/* Accordion Content */}
+                        {isExpanded && (
+                          <div className="p-lg bg-surface-container-lowest/30 border-t border-outline-variant/60 divide-y divide-outline-variant/40 space-y-lg">
+                            {/* Images Category */}
+                            {images.length > 0 && (
+                              <div className="pt-2 first:pt-0">
+                                <h4 className="text-body-sm font-bold text-primary flex items-center gap-2 mb-md tracking-wider uppercase">
+                                  <span className="material-symbols-outlined text-[18px]">photo_library</span>
+                                  Images ({images.length})
+                                </h4>
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-md">
+                                  {images.map(file => {
+                                    const srcUrl = getMediaUrl(file.media_url);
+                                    return (
+                                      <div key={file.id} className="glass-panel p-md border border-outline-variant/60 flex flex-col gap-sm hover:border-primary/20 transition-all rounded-lg">
+                                        <div className="flex items-start justify-between gap-md">
+                                          {srcUrl && (
+                                            <img 
+                                              src={srcUrl} 
+                                              alt="Preview" 
+                                              className="w-16 h-16 rounded-lg object-cover cursor-pointer border border-outline-variant hover:opacity-90 active:scale-95 transition-all shadow-sm shrink-0"
+                                              onClick={() => setLightboxMedia({ url: srcUrl, description: file.media_description || file.content })}
+                                            />
+                                          )}
+                                          <div className="flex-1 min-w-0">
+                                            <p className="text-[11px] text-on-surface-variant font-medium mt-0.5">
+                                              Reçu le {safeFormat(file.created_at, 'd MMM yyyy HH:mm', { locale: fr })}
+                                            </p>
+                                            <div className="mt-sm bg-surface-container-highest/20 p-2.5 rounded-lg border border-outline-variant/40 max-h-[80px] overflow-y-auto text-[12px] leading-relaxed custom-scrollbar">
+                                              {file.media_description || file.content || "Aucune description."}
+                                            </div>
+                                          </div>
                                         </div>
-                                      )}
-                                      {isDoc && srcUrl && (
-                                        <a 
-                                          href={srcUrl} 
-                                          target="_blank" 
-                                          rel="noreferrer" 
-                                          className="w-10 h-10 rounded-full flex items-center justify-center bg-error/20 text-error hover:bg-error/30 transition-colors"
-                                          title="Ouvrir le document"
-                                        >
-                                          <FileText size={18} />
-                                        </a>
-                                      )}
-                                    </>
-                                  );
-                                })()}
-                              </td>
-                              <td className="px-6 py-4 text-[13px] text-on-surface-variant">
-                                {safeFormat(file.created_at, 'd MMM yyyy HH:mm', { locale: fr }) || 'Date inconnue'}
-                              </td>
-                              <td className="px-6 py-4">
-                                <div className="flex items-start gap-3 max-w-[500px]">
-                                  <div className="flex-1 text-[13px] leading-relaxed text-on-surface whitespace-pre-wrap max-h-[100px] overflow-y-auto bg-surface-container-highest/30 p-3 rounded-lg border border-outline-variant custom-scrollbar">
-                                    {file.media_description || file.content || "Aucune description disponible."}
-                                  </div>
-                                  <button
-                                    onClick={() => {
-                                      navigator.clipboard.writeText(file.media_description || file.content || "");
-                                      setCopiedId(file.id);
-                                      setTimeout(() => setCopiedId(null), 2000);
-                                    }}
-                                    className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-bold transition-all shrink-0 border ${copiedId === file.id ? 'bg-primary text-on-primary border-primary' : 'glass-panel text-on-surface border-outline-variant hover:bg-surface-container'}`}
-                                  >
-                                    {copiedId === file.id ? (
-                                      <>
-                                        <Check size={14} />
-                                        <span>Copié !</span>
-                                      </>
-                                    ) : (
-                                      <>
-                                        <Copy size={14} />
-                                        <span>Copier</span>
-                                      </>
-                                    )}
-                                  </button>
+                                        <div className="flex justify-end pt-xs">
+                                          <button
+                                            onClick={() => {
+                                              navigator.clipboard.writeText(file.media_description || file.content || "");
+                                              setCopiedId(file.id);
+                                              setTimeout(() => setCopiedId(null), 2000);
+                                            }}
+                                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[11px] font-bold transition-all border ${copiedId === file.id ? 'bg-primary text-on-primary border-primary' : 'glass-panel text-on-surface border-outline-variant hover:bg-surface-container'}`}
+                                          >
+                                            {copiedId === file.id ? (
+                                              <>
+                                                <Check size={12} />
+                                                <span>Copié !</span>
+                                              </>
+                                            ) : (
+                                              <>
+                                                <Copy size={12} />
+                                                <span>Copier</span>
+                                              </>
+                                            )}
+                                          </button>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
                                 </div>
-                              </td>
-                            </tr>
-                          );
-                        })
-                      )}
-                    </tbody>
-                  </table>
-                </div>
+                              </div>
+                            )}
+
+                            {/* Audios Category */}
+                            {audios.length > 0 && (
+                              <div className="pt-lg first:pt-0">
+                                <h4 className="text-body-sm font-bold text-[#FFC107] flex items-center gap-2 mb-md tracking-wider uppercase">
+                                  <span className="material-symbols-outlined text-[18px]">mic</span>
+                                  Vocaux ({audios.length})
+                                </h4>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-md">
+                                  {audios.map(file => {
+                                    const srcUrl = getMediaUrl(file.media_url);
+                                    return (
+                                      <div key={file.id} className="glass-panel p-md border border-outline-variant/60 flex items-center gap-md hover:border-[#FFC107]/20 transition-all rounded-lg">
+                                        {srcUrl && (
+                                          <button 
+                                            className="w-12 h-12 rounded-full flex items-center justify-center shrink-0 bg-[#FFC107]/10 text-[#FFC107] border border-[#FFC107]/25 hover:bg-[#FFC107]/20 active:scale-90 transition-all shadow-sm"
+                                            onClick={() => {
+                                              const audio = new Audio(srcUrl);
+                                              audio.play().catch(e => console.log('Playback failed', e));
+                                            }}
+                                            title="Lire l'audio"
+                                          >
+                                            <Play size={20} fill="#FFC107" />
+                                          </button>
+                                        )}
+                                        <div className="flex-1 min-w-0">
+                                          <div className="flex items-center justify-between">
+                                            <p className="text-[11px] text-on-surface-variant font-medium">
+                                              Vocal • {safeFormat(file.created_at, 'd MMM yyyy HH:mm', { locale: fr })}
+                                            </p>
+                                            <button
+                                              onClick={() => {
+                                                navigator.clipboard.writeText(file.media_description || file.content || "");
+                                                setCopiedId(file.id);
+                                                setTimeout(() => setCopiedId(null), 2000);
+                                              }}
+                                              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold transition-all border ${copiedId === file.id ? 'bg-primary text-on-primary border-primary' : 'glass-panel text-on-surface border-outline-variant hover:bg-surface-container'}`}
+                                            >
+                                              {copiedId === file.id ? <Check size={12} /> : <Copy size={12} />}
+                                              <span>{copiedId === file.id ? 'Copié' : 'Copier'}</span>
+                                            </button>
+                                          </div>
+                                          <div className="mt-sm bg-surface-container-highest/20 p-2.5 rounded-lg border border-outline-variant/40 text-[12px] leading-relaxed max-h-[85px] overflow-y-auto custom-scrollbar italic text-on-surface/90">
+                                            "{file.media_description || file.content || "Transcription indisponible."}"
+                                          </div>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Documents Category */}
+                            {docs.length > 0 && (
+                              <div className="pt-lg first:pt-0">
+                                <h4 className="text-body-sm font-bold text-error flex items-center gap-2 mb-md tracking-wider uppercase">
+                                  <span className="material-symbols-outlined text-[18px]">description</span>
+                                  Documents ({docs.length})
+                                </h4>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-md">
+                                  {docs.map(file => {
+                                    const srcUrl = getMediaUrl(file.media_url);
+                                    return (
+                                      <div key={file.id} className="glass-panel p-md border border-outline-variant/60 flex items-center gap-md hover:border-error/20 transition-all rounded-lg">
+                                        {srcUrl && (
+                                          <a 
+                                            href={srcUrl} 
+                                            target="_blank" 
+                                            rel="noreferrer" 
+                                            className="w-12 h-12 rounded-full flex items-center justify-center shrink-0 bg-error/10 text-error border border-error/25 hover:bg-error/20 active:scale-90 transition-all shadow-sm"
+                                            title="Ouvrir le document"
+                                          >
+                                            <FileText size={20} />
+                                          </a>
+                                        )}
+                                        <div className="flex-1 min-w-0">
+                                          <div className="flex items-center justify-between">
+                                            <p className="text-[11px] text-on-surface-variant font-medium">
+                                              Reçu le {safeFormat(file.created_at, 'd MMM yyyy HH:mm', { locale: fr })}
+                                            </p>
+                                            <button
+                                              onClick={() => {
+                                                navigator.clipboard.writeText(file.media_description || file.content || "");
+                                                setCopiedId(file.id);
+                                                setTimeout(() => setCopiedId(null), 2000);
+                                              }}
+                                              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold transition-all border ${copiedId === file.id ? 'bg-primary text-on-primary border-primary' : 'glass-panel text-on-surface border-outline-variant hover:bg-surface-container'}`}
+                                            >
+                                              {copiedId === file.id ? <Check size={12} /> : <Copy size={12} />}
+                                              <span>{copiedId === file.id ? 'Copié' : 'Copier'}</span>
+                                            </button>
+                                          </div>
+                                          <div className="mt-sm bg-surface-container-highest/20 p-2.5 rounded-lg border border-outline-variant/40 text-[12px] leading-relaxed max-h-[85px] overflow-y-auto custom-scrollbar text-on-surface">
+                                            {file.media_description || file.content || "Fichier document."}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  });
+                })()}
               </div>
             </div>
           ) : activeTab === 'help' ? (
@@ -1093,6 +1509,97 @@ function App() {
                 {lightboxMedia.description}
               </p>
             )}
+      {/* New Policy Modal */}
+      {showNewPolicyModal && (
+        <div 
+          className="fixed inset-0 w-[100vw] h-[100vh] bg-black/70 backdrop-blur-md z-[999] flex flex-col items-center justify-center p-6"
+          onClick={() => setShowNewPolicyModal(false)}
+        >
+          <div 
+            className="glass-panel max-w-[500px] w-full p-xl rounded-2xl flex flex-col gap-lg animate-fade-in relative border border-outline-variant/60 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-center pb-md border-b border-outline-variant">
+              <div className="flex items-center gap-sm">
+                <span className="material-symbols-outlined text-primary text-[28px]" style={{ fontVariationSettings: "'FILL' 1" }}>add_card</span>
+                <h3 className="font-headline-md text-headline-md text-on-surface m-0">Nouveau dossier</h3>
+              </div>
+              <button 
+                className="bg-transparent border-none text-on-surface text-[24px] cursor-pointer hover:text-primary transition-colors"
+                onClick={() => setShowNewPolicyModal(false)}
+              >
+                &times;
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateNewPolicy} className="flex flex-col gap-md">
+              <div className="flex flex-col gap-sm">
+                <label className="text-body-sm font-bold text-on-surface-variant uppercase tracking-wider text-left">Téléphone du client (WhatsApp)</label>
+                <div className="relative flex items-center">
+                  <span className="absolute left-4 text-on-surface-variant font-bold text-body-md">+</span>
+                  <input 
+                    type="tel"
+                    required
+                    placeholder="212600000000"
+                    value={newPolicyPhone}
+                    onChange={(e) => setNewPolicyPhone(e.target.value)}
+                    className="w-full bg-surface-container-high border border-outline-variant/60 text-on-surface rounded-xl pl-8 pr-4 py-3 text-body-md focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all font-semibold"
+                  />
+                </div>
+                <span className="text-[10px] text-on-surface-variant opacity-80 text-left">Indiquez l'indicatif sans le signe + (ex: 2126XXXXXXXX pour le Maroc, 336XXXXXXXX pour la France)</span>
+              </div>
+
+              <div className="flex flex-col gap-sm">
+                <label className="text-body-sm font-bold text-on-surface-variant uppercase tracking-wider text-left">Type de dossier</label>
+                <div className="grid grid-cols-2 gap-md">
+                  <button
+                    type="button"
+                    onClick={() => setNewPolicyType('quote')}
+                    className={`flex items-center justify-center gap-sm py-3 px-4 rounded-xl border text-body-md font-bold transition-all cursor-pointer ${newPolicyType === 'quote' ? 'bg-primary/25 text-primary border-primary' : 'bg-surface-container border-outline-variant/60 text-on-surface-variant hover:bg-surface-container-high'}`}
+                  >
+                    <span className="material-symbols-outlined text-[20px]">request_quote</span>
+                    Devis
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNewPolicyType('claim')}
+                    className={`flex items-center justify-center gap-sm py-3 px-4 rounded-xl border text-body-md font-bold transition-all cursor-pointer ${newPolicyType === 'claim' ? 'bg-[#FFC107]/25 text-[#FFC107] border-[#FFC107]' : 'bg-surface-container border-outline-variant/60 text-on-surface-variant hover:bg-surface-container-high'}`}
+                  >
+                    <span className="material-symbols-outlined text-[20px]">report_problem</span>
+                    Sinistre
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-sm">
+                <label className="text-body-sm font-bold text-on-surface-variant uppercase tracking-wider text-left">Détails ou Description</label>
+                <textarea
+                  required
+                  rows="4"
+                  placeholder={newPolicyType === 'quote' ? "Ex: Assurance auto tous risques pour une Dacia Logan neuve..." : "Ex: Pare-brise fissuré suite à impact de gravillon sur l'autoroute..."}
+                  value={newPolicyDetails}
+                  onChange={(e) => setNewPolicyDetails(e.target.value)}
+                  className="w-full bg-surface-container-high border border-outline-variant/60 text-on-surface rounded-xl p-4 text-body-md focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all resize-none custom-scrollbar"
+                ></textarea>
+              </div>
+
+              <div className="flex justify-end gap-md pt-md border-t border-outline-variant">
+                <button
+                  type="button"
+                  onClick={() => setShowNewPolicyModal(false)}
+                  className="py-3 px-5 rounded-xl border border-outline-variant/60 text-on-surface-variant font-bold hover:bg-surface-container transition-all cursor-pointer text-body-sm"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingPolicy}
+                  className="py-3 px-6 rounded-xl bg-primary text-on-primary font-bold hover:opacity-90 active:scale-95 transition-all shadow-md cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed text-body-sm border-none"
+                >
+                  {isSubmittingPolicy ? "Création..." : "Créer le dossier"}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

@@ -1,7 +1,9 @@
 const Anthropic = require('@anthropic-ai/sdk');
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-const SYSTEM_PROMPT = `Tu es AssurIA, l'assistant intelligent d'un cabinet d'assurance au Maroc.
+const SYSTEM_PROMPT = `IMPORTANT: Tu dois TOUJOURS répondre uniquement en JSON valide. Jamais de texte libre. Jamais de markdown. Uniquement du JSON brut.
+
+Tu es AssurIA, l'assistant intelligent d'un cabinet d'assurance au Maroc.
 Tu parles français, arabe et darija. Adapte-toi à la langue du client.
 
 RÈGLES DE COMMUNICATION :
@@ -86,8 +88,17 @@ async function getAIResponse(userMessage, history = [], clientProfile = {}) {
         });
         const text = response.content[0].text;
         console.log('Réponse Claude:', text);
-        const clean = text.replace(/```json|```/g, '').trim();
-        return JSON.parse(clean);
+        try {
+            const clean = text.replace(/```json|```/g, '').trim();
+            return JSON.parse(clean);
+        } catch {
+            // Si Claude ne répond pas en JSON, on construit le JSON manuellement
+            return {
+                intent: 'general',
+                response: text.trim(),
+                data: {}
+            };
+        }
     } catch (error) {
         console.error('Erreur Claude:', error.message);
         return {
