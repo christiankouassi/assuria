@@ -39,6 +39,10 @@ function App() {
   const [dossierFilterClient, setDossierFilterClient] = useState(null);
   const [selectedQuoteClient, setSelectedQuoteClient] = useState(null);
   const [selectedClaimClient, setSelectedClaimClient] = useState(null);
+  const [selectedFileClient, setSelectedFileClient] = useState(null);
+  const [activeMediaTab, setActiveMediaTab] = useState('images');
+  const [isAttestationOpen, setIsAttestationOpen] = useState(false);
+  const [copiedAttestation, setCopiedAttestation] = useState(false);
   const [showNewPolicyModal, setShowNewPolicyModal] = useState(false);
   const [newPolicyPhone, setNewPolicyPhone] = useState('');
   const [newPolicyType, setNewPolicyType] = useState('quote');
@@ -682,13 +686,609 @@ function App() {
   });
 
   const chartData = last7Days.map(day => {
-    const dayMessages = data.messages.filter(m => m.created_at.startsWith(day.rawDate));
+    const dayMessages = data.messages.filter(m => safeFormat(new Date(m.created_at), 'yyyy-MM-dd') === day.rawDate);
     return {
       name: day.date,
-      Utilisateur: dayMessages.filter(m => m.sender === 'user').length,
       IA: dayMessages.filter(m => m.sender === 'ai').length,
+      Utilisateur: dayMessages.filter(m => m.sender === 'user').length
     };
   });
+
+  const renderFilesTab = () => {
+    // Level 1: Directory list mapping through all conversations
+    const directoryClients = data.conversations.map(conv => {
+      const phone = conv.user_identifier;
+      const name = conv.contact_name || conv.client_profile?.name || '';
+      const lastContactDate = conv.last_message?.created_at || conv.updated_at || conv.created_at;
+      const filesForClient = clientFiles.filter(f => (f.conversations?.user_identifier || f.user_phone || f.sender) === phone);
+      
+      return {
+        phone,
+        name,
+        lastContactDate,
+        filesCount: filesForClient.length,
+        files: filesForClient,
+        conversation: conv
+      };
+    });
+
+    if (selectedFileClient) {
+      // Level 2: Dedicated Client File & Profile CRM
+      const activeClientData = directoryClients.find(c => c.phone === selectedFileClient);
+      const profile = activeClientData?.conversation?.client_profile || {};
+      const files = activeClientData?.files || [];
+
+      // Filter files inside Level 2 by tabs
+      const filesImages = files.filter(f => f.media_type?.includes('image'));
+      const filesAudio = files.filter(f => f.media_type?.includes('audio'));
+      const filesDocs = files.filter(f => !f.media_type?.includes('image') && !f.media_type?.includes('audio'));
+
+      const personalInfo = {
+        name: profile.name || profile.fullName || null,
+        birthdate: profile.birthdate || profile.dob || profile.date_naissance || null,
+        cin: profile.cin || profile.id_number || null,
+        address: profile.address || profile.adresse || null
+      };
+
+      const renderVal = (val) => val ? (
+        <span className="font-bold text-on-surface text-body-md">{val}</span>
+      ) : (
+        <span className="text-on-surface-variant/40 italic text-body-md">Non renseigné</span>
+      );
+
+      const hasVehicle = !!profile.vehicle;
+      const hasProperty = !!profile.property;
+      const hasHealth = !!profile.health;
+
+      const v = profile.vehicle || {};
+      const brand = v.brand || v.make || v.marque || null;
+      const model = v.model || v.modele || null;
+      const year = v.year || v.annee || null;
+      const plate = v.registration || v.plate || v.immatriculation || null;
+      const vin = v.vin || null;
+
+      const p = profile.property || {};
+      const propType = p.type || p.property_type || null;
+      const propAddr = p.address || p.adresse || null;
+      const propSurface = p.surface || p.area || p.superficie || null;
+
+      const h = profile.health || {};
+      const healthInfo = h.conditions || h.details || h.coverage || h.assurance_sante || null;
+
+      const personalKeys = ['name', 'fullName', 'birthdate', 'dob', 'date_naissance', 'cin', 'id_number', 'address', 'adresse', 'ai_mode', 'session', 'vehicle', 'property', 'health'];
+      const customKeys = Object.entries(profile).filter(([key]) => !personalKeys.includes(key));
+
+      const renderAssetCard = () => {
+        if (hasVehicle) {
+          return (
+            <div className="p-md rounded-xl bg-surface-container-low border border-outline-variant/60 flex flex-col gap-2">
+              <div className="flex items-center gap-2 text-primary font-bold text-body-md border-b border-outline-variant/40 pb-2 mb-1">
+                <span className="material-symbols-outlined text-[20px]">directions_car</span>
+                Véhicule Assuré
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-md">
+                <div className="flex flex-col gap-0.5"><span className="text-[10px] text-on-surface-variant font-semibold uppercase">Marque</span><span className="font-bold text-on-surface text-sm">{brand || 'Non renseigné'}</span></div>
+                <div className="flex flex-col gap-0.5"><span className="text-[10px] text-on-surface-variant font-semibold uppercase">Modèle</span><span className="font-bold text-on-surface text-sm">{model || 'Non renseigné'}</span></div>
+                <div className="flex flex-col gap-0.5"><span className="text-[10px] text-on-surface-variant font-semibold uppercase">Année</span><span className="font-bold text-on-surface text-sm">{year || 'Non renseigné'}</span></div>
+                <div className="flex flex-col gap-0.5"><span className="text-[10px] text-on-surface-variant font-semibold uppercase">Immatriculation</span><span className="font-bold text-on-surface text-sm">{plate || 'Non renseigné'}</span></div>
+                <div className="flex flex-col gap-0.5"><span className="text-[10px] text-on-surface-variant font-semibold uppercase">VIN</span><span className="font-bold text-on-surface text-sm">{vin || 'Non renseigné'}</span></div>
+              </div>
+            </div>
+          );
+        }
+        if (hasProperty) {
+          return (
+            <div className="p-md rounded-xl bg-surface-container-low border border-outline-variant/60 flex flex-col gap-2">
+              <div className="flex items-center gap-2 text-primary font-bold text-body-md border-b border-outline-variant/40 pb-2 mb-1">
+                <span className="material-symbols-outlined text-[20px]">home</span>
+                Habitation Assurée
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-md">
+                <div className="flex flex-col gap-0.5"><span className="text-[10px] text-on-surface-variant font-semibold uppercase">Type</span><span className="font-bold text-on-surface text-sm">{propType || 'Non renseigné'}</span></div>
+                <div className="flex flex-col gap-0.5"><span className="text-[10px] text-on-surface-variant font-semibold uppercase">Superficie</span><span className="font-bold text-on-surface text-sm">{propSurface ? `${propSurface} m²` : 'Non renseigné'}</span></div>
+                <div className="flex flex-col gap-0.5"><span className="text-[10px] text-on-surface-variant font-semibold uppercase">Adresse du bien</span><span className="font-bold text-on-surface text-sm">{propAddr || 'Non renseigné'}</span></div>
+              </div>
+            </div>
+          );
+        }
+        if (hasHealth) {
+          return (
+            <div className="p-md rounded-xl bg-surface-container-low border border-outline-variant/60 flex flex-col gap-2">
+              <div className="flex items-center gap-2 text-primary font-bold text-body-md border-b border-outline-variant/40 pb-2 mb-1">
+                <span className="material-symbols-outlined text-[20px]">medical_services</span>
+                Santé & Complémentaire
+              </div>
+              <div className="flex flex-col gap-0.5">
+                <span className="text-[10px] text-on-surface-variant font-semibold uppercase">Informations santé</span>
+                <span className="font-bold text-on-surface text-sm">{healthInfo || 'Non renseigné'}</span>
+              </div>
+            </div>
+          );
+        }
+        if (customKeys.length > 0) {
+          return (
+            <div className="p-md rounded-xl bg-surface-container-low border border-outline-variant/60 flex flex-col gap-2">
+              <div className="flex items-center gap-2 text-primary font-bold text-body-md border-b border-outline-variant/40 pb-2 mb-1">
+                <span className="material-symbols-outlined text-[20px]">widgets</span>
+                Données Complémentaires
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-md">
+                {customKeys.map(([k, val]) => (
+                  <div key={k} className="flex flex-col gap-0.5">
+                    <span className="text-[10px] text-on-surface-variant font-semibold uppercase capitalize">{k.replace(/_/g, ' ')}</span>
+                    <span className="font-bold text-on-surface text-sm">{typeof val === 'object' ? JSON.stringify(val) : String(val)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        }
+        return <span className="text-on-surface-variant/40 italic text-body-md">Aucun bien enregistré</span>;
+      };
+
+      return (
+        <div className="flex flex-col gap-6 p-lg h-full overflow-y-auto custom-scrollbar position-relative">
+          {/* Header Row */}
+          <div className="flex flex-col gap-2 no-print">
+            <button 
+              onClick={() => setSelectedFileClient(null)}
+              className="flex items-center gap-1.5 self-start text-primary font-bold hover:translate-x-[-4px] active:scale-95 transition-all bg-transparent border-none cursor-pointer p-0 text-body-md"
+            >
+              <span className="material-symbols-outlined text-[20px]">arrow_back</span>
+              Retour aux clients
+            </button>
+            <div className="flex items-center gap-4 mt-2">
+              <div className={`w-14 h-14 rounded-2xl flex items-center justify-center font-bold text-on-primary-container text-headline-sm shadow-md border-2 border-primary/20 ${getInitialsColor(activeClientData.name || activeClientData.phone)}`}>
+                {getInitials(activeClientData.name || activeClientData.phone)}
+              </div>
+              <div className="flex flex-col gap-0.5">
+                <h2 className="font-headline-md text-[24px] text-on-surface m-0">
+                  Fiche Client : {activeClientData.name || `+${activeClientData.phone}`}
+                </h2>
+                {activeClientData.name && (
+                  <span className="text-body-sm text-on-surface-variant font-medium">
+                    👤 WhatsApp ID : +{activeClientData.phone}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Section: Personal Info */}
+          <div className="glass-panel p-lg no-print">
+            <h3 className="font-headline-sm text-body-lg font-bold text-primary flex items-center gap-2 mb-md mt-0">
+              <span className="material-symbols-outlined text-[20px]">person</span>
+              Informations Personnelles
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-lg">
+              <div className="flex flex-col gap-1">
+                <span className="text-on-surface-variant/70 font-semibold uppercase tracking-wider text-[10px]">Nom complet</span>
+                {renderVal(personalInfo.name)}
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="text-on-surface-variant/70 font-semibold uppercase tracking-wider text-[10px]">Date de naissance</span>
+                {renderVal(personalInfo.birthdate)}
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="text-on-surface-variant/70 font-semibold uppercase tracking-wider text-[10px]">Numéro CIN</span>
+                {renderVal(personalInfo.cin)}
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="text-on-surface-variant/70 font-semibold uppercase tracking-wider text-[10px]">Adresse</span>
+                {renderVal(personalInfo.address)}
+              </div>
+            </div>
+          </div>
+
+          {/* Section: Insured Assets */}
+          <div className="glass-panel p-lg no-print">
+            <h3 className="font-headline-sm text-body-lg font-bold text-primary flex items-center gap-2 mb-md mt-0">
+              <span className="material-symbols-outlined text-[20px]">verified_user</span>
+              Biens Assurés
+            </h3>
+            {renderAssetCard()}
+          </div>
+
+          {/* Section: Categorized Media Attachments */}
+          <div className="glass-panel p-lg no-print">
+            <h3 className="font-headline-sm text-body-lg font-bold text-primary flex items-center gap-2 mb-md mt-0">
+              <span className="material-symbols-outlined text-[20px]">folder_open</span>
+              Médias et Pièces Jointes
+            </h3>
+            
+            {/* Internal Tabs Switcher */}
+            <div className="flex border-b border-outline-variant/40 mb-lg gap-sm">
+              <button 
+                onClick={() => setActiveMediaTab('images')}
+                className={`px-4 py-2 font-bold text-body-sm bg-transparent border-none border-b-2 cursor-pointer transition-all flex items-center gap-2 ${activeMediaTab === 'images' ? 'border-primary text-primary' : 'border-transparent text-on-surface-variant hover:text-on-surface'}`}
+              >
+                📷 Images ({filesImages.length})
+              </button>
+              <button 
+                onClick={() => setActiveMediaTab('audio')}
+                className={`px-4 py-2 font-bold text-body-sm bg-transparent border-none border-b-2 cursor-pointer transition-all flex items-center gap-2 ${activeMediaTab === 'audio' ? 'border-primary text-primary' : 'border-transparent text-on-surface-variant hover:text-on-surface'}`}
+              >
+                🎙️ Vocaux ({filesAudio.length})
+              </button>
+              <button 
+                onClick={() => setActiveMediaTab('docs')}
+                className={`px-4 py-2 font-bold text-body-sm bg-transparent border-none border-b-2 cursor-pointer transition-all flex items-center gap-2 ${activeMediaTab === 'docs' ? 'border-primary text-primary' : 'border-transparent text-on-surface-variant hover:text-on-surface'}`}
+              >
+                📄 Documents ({filesDocs.length})
+              </button>
+            </div>
+
+            {/* Active Tab Contents */}
+            {activeMediaTab === 'images' && (
+              filesImages.length === 0 ? (
+                <span className="text-on-surface-variant/40 italic text-body-md block text-center py-md">Aucune image partagée</span>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-md">
+                  {filesImages.map(file => {
+                    const srcUrl = getMediaUrl(file.media_url);
+                    return (
+                      <div key={file.id} className="p-md bg-surface-container-low border border-outline-variant/60 flex flex-col gap-sm rounded-lg hover:border-primary/20 transition-all">
+                        <div className="flex items-start gap-md">
+                          {srcUrl && (
+                            <img 
+                              src={srcUrl} 
+                              alt="Preview Image" 
+                              className="w-20 h-20 rounded-lg object-cover cursor-pointer border border-outline-variant hover:opacity-90 active:scale-95 transition-all shadow-sm shrink-0"
+                              onClick={() => setLightboxMedia({ url: srcUrl, description: file.media_description || file.content })}
+                            />
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[10px] text-on-surface-variant font-medium mt-0">
+                              Reçu le {safeFormat(file.created_at, 'd MMM yyyy HH:mm', { locale: fr })}
+                            </p>
+                            <div className="mt-xs bg-surface-container-highest/20 p-2 rounded border border-outline-variant/30 max-h-[70px] overflow-y-auto text-[11px] leading-relaxed custom-scrollbar">
+                              {file.media_description || "Aucune métadonnée extraite."}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )
+            )}
+
+            {activeMediaTab === 'audio' && (
+              filesAudio.length === 0 ? (
+                <span className="text-on-surface-variant/40 italic text-body-md block text-center py-md">Aucun vocal partagé</span>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-md">
+                  {filesAudio.map(file => {
+                    const srcUrl = getMediaUrl(file.media_url);
+                    return (
+                      <div key={file.id} className="p-md bg-surface-container-low border border-outline-variant/60 flex flex-col gap-sm rounded-lg hover:border-primary/20 transition-all">
+                        <div className="flex items-center justify-between">
+                          <p className="text-[10px] text-on-surface-variant font-medium m-0">
+                            Vocal reçu le {safeFormat(file.created_at, 'd MMM yyyy HH:mm', { locale: fr })}
+                          </p>
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(file.media_description || file.content || "");
+                              setCopiedId(file.id);
+                              setTimeout(() => setCopiedId(null), 2000);
+                            }}
+                            className={`flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold transition-all border cursor-pointer ${copiedId === file.id ? 'bg-primary text-on-primary border-primary' : 'bg-transparent text-on-surface border-outline-variant hover:bg-surface-container-high'}`}
+                          >
+                            {copiedId === file.id ? 'Copié !' : 'Copier'}
+                          </button>
+                        </div>
+                        {srcUrl && (
+                          <audio src={srcUrl} controls className="w-full mt-1 scale-95" />
+                        )}
+                        <div className="mt-xs bg-surface-container-highest/20 p-2.5 rounded border border-outline-variant/30 text-[12px] leading-relaxed max-h-[80px] overflow-y-auto custom-scrollbar italic text-on-surface/90">
+                          "{file.media_description || file.content || "Transcription indisponible."}"
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )
+            )}
+
+            {activeMediaTab === 'docs' && (
+              filesDocs.length === 0 ? (
+                <span className="text-on-surface-variant/40 italic text-body-md block text-center py-md">Aucun document partagé</span>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-md">
+                  {filesDocs.map(file => {
+                    const srcUrl = getMediaUrl(file.media_url);
+                    return (
+                      <div key={file.id} className="p-md bg-surface-container-low border border-outline-variant/60 flex gap-md rounded-lg hover:border-primary/20 transition-all">
+                        <div className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0 bg-error/15 text-error border border-error/20">
+                          <span className="material-symbols-outlined text-[28px]" style={{ fontVariationSettings: "'FILL' 1" }}>picture_as_pdf</span>
+                        </div>
+                        <div className="flex-1 min-w-0 flex flex-col justify-between">
+                          <div>
+                            <div className="flex items-center justify-between gap-md">
+                              <span className="font-bold text-on-surface text-sm truncate block" title={file.content || 'Document'}>
+                                {file.content || 'document.pdf'}
+                              </span>
+                              {srcUrl && (
+                                <a 
+                                  href={srcUrl} 
+                                  download
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="flex items-center gap-1 text-[11px] font-bold text-primary hover:underline bg-transparent border-none cursor-pointer p-0"
+                                >
+                                  <span className="material-symbols-outlined text-[16px]">download</span>
+                                  Télécharger
+                                </a>
+                              )}
+                            </div>
+                            <p className="text-[10px] text-on-surface-variant font-medium mt-0.5 mb-1.5">
+                              Reçu le {safeFormat(file.created_at, 'd MMM yyyy HH:mm', { locale: fr })}
+                            </p>
+                            <div className="bg-surface-container-highest/20 p-2.5 rounded border border-outline-variant/30 text-[11px] leading-relaxed max-h-[80px] overflow-y-auto custom-scrollbar text-on-surface-variant">
+                              <strong className="text-primary text-[10px] block uppercase tracking-wider mb-0.5">Résumé Claude :</strong>
+                              {file.media_description || "Analyse et synthèse du PDF en attente."}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )
+            )}
+          </div>
+
+          {/* Bottom Redirection Buttons */}
+          <div className="flex flex-col sm:flex-row gap-4 mt-2 no-print">
+            <button 
+              onClick={() => {
+                setSelectedClaimClient(selectedFileClient);
+                setActiveTab('claims');
+              }}
+              className="flex-1 flex items-center justify-center gap-2 py-3 px-4 bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 rounded-xl font-bold transition-all text-body-md cursor-pointer"
+            >
+              <span className="material-symbols-outlined text-[20px]" style={{ fontVariationSettings: "'FILL' 1" }}>shield</span>
+              Voir les sinistres
+            </button>
+            
+            <button 
+              onClick={() => {
+                setSelectedQuoteClient(selectedFileClient);
+                setActiveTab('quotes');
+              }}
+              className="flex-1 flex items-center justify-center gap-2 py-3 px-4 bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 rounded-xl font-bold transition-all text-body-md cursor-pointer"
+            >
+              <span className="material-symbols-outlined text-[20px]">request_quote</span>
+              Voir les devis
+            </button>
+          </div>
+
+          {/* Floating Action Button for attestation */}
+          <button 
+            onClick={() => {
+              setIsAttestationOpen(true);
+              setCopiedAttestation(false);
+            }}
+            className="fixed bottom-6 right-6 w-14 h-14 rounded-full bg-primary text-on-primary-container shadow-2xl flex items-center justify-center cursor-pointer hover:scale-110 active:scale-95 transition-all z-40 border-none no-print"
+            title="Préparer attestation"
+          >
+            <span className="material-symbols-outlined text-[28px]" style={{ fontVariationSettings: "'FILL' 1" }}>assignment</span>
+          </button>
+
+          {/* Printable Certificate Modal */}
+          {isAttestationOpen && (
+            <div className="fixed inset-0 bg-background/80 backdrop-blur-md flex items-center justify-center z-[100] p-md overflow-y-auto no-print">
+              <div className="glass-panel max-w-2xl w-full p-lg flex flex-col gap-6 relative shadow-2xl bg-surface-container border border-outline-variant/60">
+                <button 
+                  onClick={() => setIsAttestationOpen(false)}
+                  className="absolute top-4 right-4 bg-transparent border-none text-on-surface-variant hover:text-on-surface cursor-pointer"
+                >
+                  <span className="material-symbols-outlined text-[24px]">close</span>
+                </button>
+                
+                <h3 className="font-headline-sm text-body-lg font-bold text-primary m-0 flex items-center gap-2">
+                  <span className="material-symbols-outlined text-[20px]" style={{ fontVariationSettings: "'FILL' 1" }}>assignment</span>
+                  Aperçu de l'Attestation Officielle
+                </h3>
+                
+                {/* Printable Area */}
+                <div id="printable-area" className="p-xl bg-white text-black border-2 border-black rounded-lg shadow-inner flex flex-col gap-6 printable-attestation-container max-h-[480px] overflow-y-auto text-left">
+                  <div className="flex justify-between items-start border-b-2 border-black pb-4">
+                    <div>
+                      <h1 className="text-[20px] font-extrabold uppercase m-0 tracking-wide text-black" style={{ color: '#000000', margin: '0' }}>Assuria AI Maroc</h1>
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-black m-0 mt-1" style={{ color: '#000000' }}>Courtage & Conseil en Assurances</p>
+                      <p className="text-[9px] text-gray-700 m-0" style={{ color: '#000000' }}>Tél: {agencyPhone} | Email: {agencyEmail}</p>
+                    </div>
+                    <div className="text-right">
+                      <span className="border-2 border-black px-2 py-0.5 font-bold text-[10px] uppercase text-black">Attestation Provisoire</span>
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <h2 className="text-[16px] font-bold text-center underline uppercase my-2 text-black" style={{ color: '#000000' }}>Attestation d'Assurance Active</h2>
+                    <p className="text-xs leading-relaxed text-black my-3" style={{ color: '#000000' }}>
+                      Nous soussignés, <strong>{agencyName}</strong>, certifions par la présente que le client désigné ci-dessous fait l'objet d'une couverture d'assurance en vigueur auprès de nos services :
+                    </p>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-y-2 border border-black p-3 bg-gray-50 rounded" style={{ borderColor: '#000000', backgroundColor: '#f9fafb' }}>
+                    <div><span className="text-[9px] font-bold uppercase text-gray-700 block">Nom du titulaire :</span><strong className="text-black text-xs">{personalInfo.name || activeClientData.name || 'Non renseigné'}</strong></div>
+                    <div><span className="text-[9px] font-bold uppercase text-gray-700 block">Numéro CIN :</span><strong className="text-black text-xs">{personalInfo.cin || 'Non renseigné'}</strong></div>
+                    <div><span className="text-[9px] font-bold uppercase text-gray-700 block">Date de naissance :</span><strong className="text-black text-xs">{personalInfo.birthdate || 'Non renseigné'}</strong></div>
+                    <div><span className="text-[9px] font-bold uppercase text-gray-700 block">WhatsApp ID :</span><strong className="text-black text-xs">+{activeClientData.phone}</strong></div>
+                    <div className="col-span-2"><span className="text-[9px] font-bold uppercase text-gray-700 block">Adresse de résidence :</span><strong className="text-black text-xs">{personalInfo.address || 'Non renseigné'}</strong></div>
+                  </div>
+                  
+                  <div className="border border-black p-3 bg-gray-50 rounded animate-none" style={{ borderColor: '#000000', backgroundColor: '#f9fafb' }}>
+                    <span className="text-[9px] font-bold uppercase text-gray-700 block mb-1">Identification du bien assuré :</span>
+                    {hasVehicle ? (
+                      <div className="grid grid-cols-3 gap-md text-xs text-black" style={{ color: '#000000' }}>
+                        <div><strong>Marque / Modèle:</strong> {brand || 'Non renseigné'} {model || ''}</div>
+                        <div><strong>Immatriculation:</strong> {plate || 'Non renseigné'}</div>
+                        <div><strong>Année / VIN:</strong> {year || 'N/A'} • {vin || 'N/A'}</div>
+                      </div>
+                    ) : hasProperty ? (
+                      <div className="grid grid-cols-2 gap-md text-xs text-black" style={{ color: '#000000' }}>
+                        <div><strong>Type de bien:</strong> {propType || 'Non renseigné'} ({propSurface ? `${propSurface} m²` : 'N/A'})</div>
+                        <div><strong>Lieu du bien:</strong> {propAddr || 'Non renseigné'}</div>
+                      </div>
+                    ) : (
+                      <div className="text-xs text-black" style={{ color: '#000000' }}>
+                        {customKeys.length > 0 ? (
+                          <ul className="m-0 pl-4 space-y-1">
+                            {customKeys.map(([k, val]) => (
+                              <li key={k}><strong>{k.replace(/_/g, ' ')}:</strong> {typeof val === 'object' ? JSON.stringify(val) : String(val)}</li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <span className="italic text-gray-500">Aucun descriptif de bien complémentaire enregistré.</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="mt-2 text-[11px] leading-relaxed text-black" style={{ color: '#000000' }}>
+                    <p className="m-0">Cette attestation est délivrée pour servir et valoir ce que de droit.</p>
+                    <p className="m-0 mt-1">Fait à Casablanca, le <strong>{safeFormat(new Date().toISOString(), 'd MMMM yyyy', { locale: fr })}</strong></p>
+                  </div>
+                  
+                  <div className="flex justify-between items-end mt-4 pt-3 border-t border-dashed border-black" style={{ borderColor: '#000000' }}>
+                    <div className="text-[8px] text-gray-500">Document généré automatiquement par le Portail AssurIA AI.</div>
+                    <div className="text-center font-bold text-[10px] uppercase text-black border-2 border-black px-3 py-1.5 bg-gray-100" style={{ borderColor: '#000000', backgroundColor: '#f3f4f6' }}>
+                      Signature & Cachet
+                    </div>
+                  </div>
+                </div>
+
+                {/* Modal Footer Controls */}
+                <div className="flex gap-4">
+                  <button 
+                    onClick={() => {
+                      const textToCopy = `
+========================================
+             ASSURIA AI MAROC
+   Courtage & Conseil en Assurances
+========================================
+ATTESTATION PROVISOIRE D'ASSURANCE ACTIVE
+
+Désigné : ${personalInfo.name || activeClientData.name || 'Non renseigné'}
+CIN : ${personalInfo.cin || 'Non renseigné'}
+Date de naissance : ${personalInfo.birthdate || 'Non renseigné'}
+WhatsApp : +${activeClientData.phone}
+Adresse : ${personalInfo.address || 'Non renseigné'}
+
+BIENS ASSURES :
+${hasVehicle ? `Véhicule: ${brand || ''} ${model || ''} | Immatriculation: ${plate || ''} | VIN: ${vin || ''}` : hasProperty ? `Habitation: ${propType || ''} | Adresse: ${propAddr || ''} | Superficie: ${propSurface || ''} m²` : 'Données complémentaires'}
+
+Fait à Casablanca, le ${safeFormat(new Date().toISOString(), 'd MMMM yyyy', { locale: fr })}
+Document certifié par AssurIA AI.
+                      `;
+                      navigator.clipboard.writeText(textToCopy.trim());
+                      setCopiedAttestation(true);
+                      setTimeout(() => setCopiedAttestation(false), 2000);
+                    }}
+                    className={`flex-1 flex items-center justify-center gap-2 py-2 px-4 rounded-xl font-bold transition-all text-body-sm cursor-pointer border ${copiedAttestation ? 'bg-primary text-on-primary border-primary' : 'bg-transparent text-on-surface border-outline-variant hover:bg-surface-container-high'}`}
+                  >
+                    <span className="material-symbols-outlined text-[18px]">{copiedAttestation ? 'check' : 'content_copy'}</span>
+                    {copiedAttestation ? 'Copié !' : 'Copier tout'}
+                  </button>
+                  
+                  <button 
+                    onClick={() => {
+                      window.print();
+                    }}
+                    className="flex-1 flex items-center justify-center gap-2 py-2 px-4 bg-primary text-on-primary-container rounded-xl font-bold hover:scale-105 active:scale-95 transition-all cursor-pointer border-none"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">print</span>
+                    Imprimer
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // Level 1: Client Directory
+    return (
+      <div className="flex flex-col gap-6 p-lg h-full overflow-y-auto custom-scrollbar no-print">
+        <div>
+          <h2 className="font-headline-md text-[24px] text-on-surface m-0 font-bold">Fichiers Clients</h2>
+          <p className="text-body-sm text-on-surface-variant m-0 mt-1">
+            Consultez les dossiers clients complets, leurs informations personnelles, les biens assurés, et les pièces jointes WhatsApp.
+          </p>
+        </div>
+
+        {directoryClients.length === 0 ? (
+          <div className="glass-panel p-xl text-center flex flex-col items-center justify-center text-on-surface-variant opacity-70">
+            <span className="material-symbols-outlined text-5xl mb-sm">folder_open</span>
+            <p className="m-0 text-body-md font-bold">Aucun dossier client trouvé</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {directoryClients.map(client => {
+              return (
+                <div 
+                  key={client.phone}
+                  onClick={() => {
+                    setSelectedFileClient(client.phone);
+                    setActiveMediaTab('images');
+                  }}
+                  className="glass-card p-md rounded-2xl flex flex-col justify-between hover:scale-[1.02] active:scale-[0.98] hover:border-primary/40 transition-all duration-300 border border-outline-variant/60 cursor-pointer shadow-lg bg-surface-container-low/20"
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-bold text-on-primary-container text-body-lg shadow-inner border border-outline-variant/40 ${getInitialsColor(client.name || client.phone)}`}>
+                        {getInitials(client.name || client.phone)}
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="font-bold text-on-surface text-body-md">
+                          {client.name || `+${client.phone}`}
+                        </span>
+                        {client.name && (
+                          <span className="text-xs text-on-surface-variant/80 font-medium">
+                            📞 +{client.phone}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <span className="text-[11px] text-primary bg-primary/10 border border-primary/25 px-2 py-0.5 rounded-full font-bold">
+                      {client.filesCount} fichier{client.filesCount > 1 ? 's' : ''}
+                    </span>
+                  </div>
+
+                  <div className="my-4 pt-3 border-t border-outline-variant/40 flex justify-between items-center text-xs">
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-on-surface-variant/70 font-semibold uppercase tracking-wider text-[9px]">Type de client</span>
+                      <span className="font-bold text-on-surface uppercase">
+                        {client.conversation?.client_profile?.vehicle ? 'Automobile' : client.conversation?.client_profile?.property ? 'Habitation' : 'Général'}
+                      </span>
+                    </div>
+                    <div className="flex flex-col items-end gap-0.5">
+                      <span className="text-on-surface-variant/70 font-semibold uppercase tracking-wider text-[9px]">Dernier Contact</span>
+                      <span className="font-bold text-primary">
+                        {formatConversationDate(client.lastContactDate)}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-2 border-t border-outline-variant/30">
+                    <span className="text-[11px] text-on-surface-variant/70">
+                      Statut profil : <strong className="text-on-surface">Complet</strong>
+                    </span>
+                    <span className="text-primary font-bold text-xs flex items-center gap-1 hover:gap-2 transition-all">
+                      Ouvrir Fiche <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <Layout
@@ -1579,274 +2179,8 @@ function App() {
               </div>
             );
           })()
-          : activeTab === 'files' ? (
-            <div className="flex flex-col gap-6 p-lg h-full overflow-y-auto custom-scrollbar">
-              <div className="flex justify-between items-center">
-                <div>
-                  <h2 className="font-headline-md text-[24px] text-on-surface m-0">Fichiers clients</h2>
-                  <p className="text-body-sm text-on-surface-variant m-0 mt-1">
-                    Retrouvez tous les documents partagés par vos clients classés par dossiers de conversation.
-                  </p>
-                </div>
-                <div className="flex items-center gap-3">
-                  {fileFilterClient && (
-                    <button 
-                      onClick={() => setFileFilterClient(null)} 
-                      className="flex items-center gap-2 px-3 py-1.5 bg-error/15 text-error border border-error/20 rounded-lg text-body-sm font-bold hover:bg-error/20 transition-all"
-                    >
-                      <span className="material-symbols-outlined text-[16px]">close</span>
-                      Filtre : +{fileFilterClient} (Effacer)
-                    </button>
-                  )}
-                  <span className="text-[14px] text-on-surface-variant font-medium bg-surface-container px-3 py-1.5 rounded-lg border border-outline-variant">
-                    {clientFiles.length} fichier(s) au total
-                  </span>
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-4">
-                {(() => {
-                  // 1. Group files by client
-                  const filesByClient = clientFiles.reduce((acc, file) => {
-                    const clientPhone = file.conversations?.user_identifier || 'Inconnu';
-                    if (!acc[clientPhone]) {
-                      acc[clientPhone] = [];
-                    }
-                    acc[clientPhone].push(file);
-                    return acc;
-                  }, {});
-
-                  // 2. Filter clients if filter is set
-                  const clientPhones = Object.keys(filesByClient).filter(phone => 
-                    !fileFilterClient || phone === fileFilterClient
-                  );
-
-                  if (clientPhones.length === 0) {
-                    return (
-                      <div className="glass-panel p-xl text-center flex flex-col items-center justify-center text-on-surface-variant opacity-70">
-                        <span className="material-symbols-outlined text-5xl mb-sm text-on-surface-variant">folder_open</span>
-                        <p className="m-0 text-body-md font-bold">Aucun dossier de fichiers trouvé</p>
-                        {fileFilterClient && (
-                          <button onClick={() => setFileFilterClient(null)} className="mt-md px-4 py-2 bg-primary text-on-primary rounded-xl font-bold hover:scale-105 transition-all text-body-sm">
-                            Afficher tous les fichiers
-                          </button>
-                        )}
-                      </div>
-                    );
-                  }
-
-                  return clientPhones.map(phone => {
-                    const files = filesByClient[phone] || [];
-                    const isExpanded = !!expandedClients[phone] || fileFilterClient === phone;
-                    
-                    // Categorize files
-                    const images = files.filter(f => f.media_type?.includes('image'));
-                    const audios = files.filter(f => f.media_type?.includes('audio'));
-                    const docs = files.filter(f => !f.media_type?.includes('image') && !f.media_type?.includes('audio'));
-
-                    return (
-                      <div key={phone} className="glass-panel overflow-hidden border border-outline-variant rounded-xl bg-surface-container-low/30 hover:border-primary/30 transition-all">
-                        {/* Accordion Header */}
-                        <button 
-                          onClick={() => setExpandedClients(prev => ({ ...prev, [phone]: !prev[phone] }))}
-                          className="w-full flex items-center justify-between p-lg text-left bg-surface-container-low hover:bg-surface-container-high transition-colors"
-                        >
-                          <div className="flex items-center gap-md">
-                            <div className="w-12 h-12 rounded-full bg-primary/10 text-primary border border-primary/20 flex items-center justify-center">
-                              <span className="material-symbols-outlined text-[24px]">folder_shared</span>
-                            </div>
-                            <div>
-                              <h3 className="font-bold text-headline-sm text-on-surface m-0">+{phone}</h3>
-                              <p className="text-body-sm text-on-surface-variant m-0 mt-0.5">
-                                {files.length} fichier{files.length > 1 ? 's' : ''} partagé{files.length > 1 ? 's' : ''}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-sm">
-                            <span className="text-[12px] font-bold text-primary bg-primary/10 border border-primary/25 px-2.5 py-1 rounded-full uppercase">
-                              {images.length > 0 && '📷 '}
-                              {audios.length > 0 && '🎙️ '}
-                              {docs.length > 0 && '📄'}
-                            </span>
-                            <span className={`material-symbols-outlined transition-transform duration-350 text-on-surface-variant ${isExpanded ? 'rotate-180 text-primary' : ''}`}>
-                              keyboard_arrow_down
-                            </span>
-                          </div>
-                        </button>
-
-                        {/* Accordion Content */}
-                        {isExpanded && (
-                          <div className="p-lg bg-surface-container-lowest/30 border-t border-outline-variant/60 divide-y divide-outline-variant/40 space-y-lg">
-                            {/* Images Category */}
-                            {images.length > 0 && (
-                              <div className="pt-2 first:pt-0">
-                                <h4 className="text-body-sm font-bold text-primary flex items-center gap-2 mb-md tracking-wider uppercase">
-                                  <span className="material-symbols-outlined text-[18px]">photo_library</span>
-                                  Images ({images.length})
-                                </h4>
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-md">
-                                  {images.map(file => {
-                                    const srcUrl = getMediaUrl(file.media_url);
-                                    return (
-                                      <div key={file.id} className="glass-panel p-md border border-outline-variant/60 flex flex-col gap-sm hover:border-primary/20 transition-all rounded-lg">
-                                        <div className="flex items-start justify-between gap-md">
-                                          {srcUrl && (
-                                            <img 
-                                              src={srcUrl} 
-                                              alt="Preview" 
-                                              className="w-16 h-16 rounded-lg object-cover cursor-pointer border border-outline-variant hover:opacity-90 active:scale-95 transition-all shadow-sm shrink-0"
-                                              onClick={() => setLightboxMedia({ url: srcUrl, description: file.media_description || file.content })}
-                                            />
-                                          )}
-                                          <div className="flex-1 min-w-0">
-                                            <p className="text-[11px] text-on-surface-variant font-medium mt-0.5">
-                                              Reçu le {safeFormat(file.created_at, 'd MMM yyyy HH:mm', { locale: fr })}
-                                            </p>
-                                            <div className="mt-sm bg-surface-container-highest/20 p-2.5 rounded-lg border border-outline-variant/40 max-h-[80px] overflow-y-auto text-[12px] leading-relaxed custom-scrollbar">
-                                              {file.media_description || file.content || "Aucune description."}
-                                            </div>
-                                          </div>
-                                        </div>
-                                        <div className="flex justify-end pt-xs">
-                                          <button
-                                            onClick={() => {
-                                              navigator.clipboard.writeText(file.media_description || file.content || "");
-                                              setCopiedId(file.id);
-                                              setTimeout(() => setCopiedId(null), 2000);
-                                            }}
-                                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[11px] font-bold transition-all border ${copiedId === file.id ? 'bg-primary text-on-primary border-primary' : 'glass-panel text-on-surface border-outline-variant hover:bg-surface-container'}`}
-                                          >
-                                            {copiedId === file.id ? (
-                                              <>
-                                                <Check size={12} />
-                                                <span>Copié !</span>
-                                              </>
-                                            ) : (
-                                              <>
-                                                <Copy size={12} />
-                                                <span>Copier</span>
-                                              </>
-                                            )}
-                                          </button>
-                                        </div>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                            )}
-
-                            {/* Audios Category */}
-                            {audios.length > 0 && (
-                              <div className="pt-lg first:pt-0">
-                                <h4 className="text-body-sm font-bold text-[#FFC107] flex items-center gap-2 mb-md tracking-wider uppercase">
-                                  <span className="material-symbols-outlined text-[18px]">mic</span>
-                                  Vocaux ({audios.length})
-                                </h4>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-md">
-                                  {audios.map(file => {
-                                    const srcUrl = getMediaUrl(file.media_url);
-                                    return (
-                                      <div key={file.id} className="glass-panel p-md border border-outline-variant/60 flex items-center gap-md hover:border-[#FFC107]/20 transition-all rounded-lg">
-                                        {srcUrl && (
-                                          <button 
-                                            className="w-12 h-12 rounded-full flex items-center justify-center shrink-0 bg-[#FFC107]/10 text-[#FFC107] border border-[#FFC107]/25 hover:bg-[#FFC107]/20 active:scale-90 transition-all shadow-sm"
-                                            onClick={() => {
-                                              const audio = new Audio(srcUrl);
-                                              audio.play().catch(e => console.log('Playback failed', e));
-                                            }}
-                                            title="Lire l'audio"
-                                          >
-                                            <Play size={20} fill="#FFC107" />
-                                          </button>
-                                        )}
-                                        <div className="flex-1 min-w-0">
-                                          <div className="flex items-center justify-between">
-                                            <p className="text-[11px] text-on-surface-variant font-medium">
-                                              Vocal • {safeFormat(file.created_at, 'd MMM yyyy HH:mm', { locale: fr })}
-                                            </p>
-                                            <button
-                                              onClick={() => {
-                                                navigator.clipboard.writeText(file.media_description || file.content || "");
-                                                setCopiedId(file.id);
-                                                setTimeout(() => setCopiedId(null), 2000);
-                                              }}
-                                              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold transition-all border ${copiedId === file.id ? 'bg-primary text-on-primary border-primary' : 'glass-panel text-on-surface border-outline-variant hover:bg-surface-container'}`}
-                                            >
-                                              {copiedId === file.id ? <Check size={12} /> : <Copy size={12} />}
-                                              <span>{copiedId === file.id ? 'Copié' : 'Copier'}</span>
-                                            </button>
-                                          </div>
-                                          <div className="mt-sm bg-surface-container-highest/20 p-2.5 rounded-lg border border-outline-variant/40 text-[12px] leading-relaxed max-h-[85px] overflow-y-auto custom-scrollbar italic text-on-surface/90">
-                                            "{file.media_description || file.content || "Transcription indisponible."}"
-                                          </div>
-                                        </div>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                            )}
-
-                            {/* Documents Category */}
-                            {docs.length > 0 && (
-                              <div className="pt-lg first:pt-0">
-                                <h4 className="text-body-sm font-bold text-error flex items-center gap-2 mb-md tracking-wider uppercase">
-                                  <span className="material-symbols-outlined text-[18px]">description</span>
-                                  Documents ({docs.length})
-                                </h4>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-md">
-                                  {docs.map(file => {
-                                    const srcUrl = getMediaUrl(file.media_url);
-                                    return (
-                                      <div key={file.id} className="glass-panel p-md border border-outline-variant/60 flex items-center gap-md hover:border-error/20 transition-all rounded-lg">
-                                        {srcUrl && (
-                                          <a 
-                                            href={srcUrl} 
-                                            target="_blank" 
-                                            rel="noreferrer" 
-                                            className="w-12 h-12 rounded-full flex items-center justify-center shrink-0 bg-error/10 text-error border border-error/25 hover:bg-error/20 active:scale-90 transition-all shadow-sm"
-                                            title="Ouvrir le document"
-                                          >
-                                            <FileText size={20} />
-                                          </a>
-                                        )}
-                                        <div className="flex-1 min-w-0">
-                                          <div className="flex items-center justify-between">
-                                            <p className="text-[11px] text-on-surface-variant font-medium">
-                                              Reçu le {safeFormat(file.created_at, 'd MMM yyyy HH:mm', { locale: fr })}
-                                            </p>
-                                            <button
-                                              onClick={() => {
-                                                navigator.clipboard.writeText(file.media_description || file.content || "");
-                                                setCopiedId(file.id);
-                                                setTimeout(() => setCopiedId(null), 2000);
-                                              }}
-                                              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold transition-all border ${copiedId === file.id ? 'bg-primary text-on-primary border-primary' : 'glass-panel text-on-surface border-outline-variant hover:bg-surface-container'}`}
-                                            >
-                                              {copiedId === file.id ? <Check size={12} /> : <Copy size={12} />}
-                                              <span>{copiedId === file.id ? 'Copié' : 'Copier'}</span>
-                                            </button>
-                                          </div>
-                                          <div className="mt-sm bg-surface-container-highest/20 p-2.5 rounded-lg border border-outline-variant/40 text-[12px] leading-relaxed max-h-[85px] overflow-y-auto custom-scrollbar text-on-surface">
-                                            {file.media_description || file.content || "Fichier document."}
-                                          </div>
-                                        </div>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  });
-                })()}
-              </div>
-            </div>
-          ) : activeTab === 'help' ? (
+          : activeTab === 'files' ? renderFilesTab()
+          : activeTab === 'help' ? (
             <div className="flex flex-col gap-6 max-w-3xl mx-auto p-lg h-full overflow-y-auto custom-scrollbar w-full">
               <h2 className="font-headline-md text-[24px] text-on-surface m-0">Centre d'Aide</h2>
               

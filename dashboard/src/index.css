@@ -125,3 +125,51 @@ body {
   background: var(--outline-variant);
   border-radius: 10px;
 }
+
+@media print {
+  body {
+    background: white !important;
+    color: #000000 !important;
+    font-family: 'Inter', 'Helvetica', 'Arial', sans-serif !important;
+  }
+  
+  /* Hide all dashboard containers and buttons when printing */
+  aside, 
+  header, 
+  .no-print, 
+  button,
+  .glass-panel,
+  .glass-card {
+    display: none !important;
+    opacity: 0 !important;
+  }
+  
+  /* Ensure parent layout blocks do not hide our printable element */
+  div, main, section {
+    background: transparent !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+  
+  /* Render the official certificate in full high-contrast layout */
+  .printable-attestation-container {
+    display: block !important;
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 30px !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    box-shadow: none !important;
+    border: 2px solid #000000 !important;
+    border-radius: 0 !important;
+    visibility: visible !important;
+  }
+  
+  .printable-attestation-container * {
+    visibility: visible !important;
+    color: #000000 !important;
+  }
+}
