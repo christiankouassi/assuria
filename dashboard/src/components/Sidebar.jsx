@@ -19,14 +19,14 @@ function NavItem({ active, onClick, icon, label, badge }) {
   );
 }
 
-export default function Sidebar({ activeTab, setActiveTab, unreadCounts, onNewPolicy }) {
+export default function Sidebar({ activeTab, setActiveTab, unreadCounts, onNewPolicy, t }) {
   const tabs = [
-    { id: 'dashboard', icon: 'dashboard', label: 'Dashboard' },
-    { id: 'conversations', icon: 'chat', label: 'Messages', badge: unreadCounts?.messages },
-    { id: 'claims', icon: 'report_problem', label: 'Sinistres', badge: unreadCounts?.claims },
-    { id: 'quotes', icon: 'request_quote', label: 'Devis', badge: unreadCounts?.quotes },
-    { id: 'files', icon: 'folder_open', label: 'Fichiers' },
-    { id: 'help', icon: 'help', label: 'Aide' },
+    { id: 'dashboard', icon: 'dashboard', label: t('sidebar.dashboard') },
+    { id: 'conversations', icon: 'chat', label: t('sidebar.messages'), badge: unreadCounts?.messages },
+    { id: 'claims', icon: 'report_problem', label: t('sidebar.claims'), badge: unreadCounts?.claims },
+    { id: 'quotes', icon: 'request_quote', label: t('sidebar.quotes'), badge: unreadCounts?.quotes },
+    { id: 'files', icon: 'folder_open', label: t('sidebar.files') },
+    { id: 'help', icon: 'help', label: t('sidebar.help') },
   ];
 
   return (
@@ -34,7 +34,7 @@ export default function Sidebar({ activeTab, setActiveTab, unreadCounts, onNewPo
       {/* Logo - fixe en haut */}
       <div className="mb-lg px-sm flex-shrink-0">
         <h1 className="font-headline-md text-headline-md font-bold text-primary m-0">Assuria AI</h1>
-        <p className="text-on-surface-variant font-label-md text-label-md uppercase tracking-wider m-0">Advisor Portal</p>
+        <p className="text-on-surface-variant font-label-md text-label-md uppercase tracking-wider m-0">{t('sidebar.advisorPortal')}</p>
       </div>
       
       {/* Navigation - scrollable si nécessaire */}
@@ -58,7 +58,7 @@ export default function Sidebar({ activeTab, setActiveTab, unreadCounts, onNewPo
           className="w-full bg-primary text-on-primary py-md rounded-lg font-bold transition-transform scale-95 active:scale-90 flex items-center justify-center gap-sm cursor-pointer border-none"
         >
           <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>add</span>
-          New Policy
+          {t('sidebar.newPolicy')}
         </button>
         <div>
           <div 
@@ -70,7 +70,7 @@ export default function Sidebar({ activeTab, setActiveTab, unreadCounts, onNewPo
             }`}
           >
             <span className="material-symbols-outlined">settings</span>
-            <span className="font-body-md">Settings</span>
+            <span className="font-body-md">{t('sidebar.settings')}</span>
           </div>
         </div>
       </div>

@@ -82,4 +82,50 @@ router.post('/:id/message', async (req, res) => {
     }
 });
 
+// PUT /api/conversations/quotes/:id/status
+router.put('/quotes/:id/status', async (req, res) => {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    try {
+        const { data, error } = await supabase
+            .from('quotes')
+            .update({ status })
+            .eq('id', id)
+            .select();
+
+        if (error) {
+            console.error('Erreur Supabase update quote:', error);
+            return res.status(500).json({ error: error.message });
+        }
+        res.json({ success: true, data });
+    } catch (err) {
+        console.error('Erreur update quote:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// PUT /api/conversations/claims/:id/status
+router.put('/claims/:id/status', async (req, res) => {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    try {
+        const { data, error } = await supabase
+            .from('claims')
+            .update({ status })
+            .eq('id', id)
+            .select();
+
+        if (error) {
+            console.error('Erreur Supabase update claim:', error);
+            return res.status(500).json({ error: error.message });
+        }
+        res.json({ success: true, data });
+    } catch (err) {
+        console.error('Erreur update claim:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 module.exports = router;

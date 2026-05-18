@@ -151,13 +151,27 @@ async function processMessage(body) {
             .eq('conversation_id', conv.id)
             .in('status', ['pending', 'in_progress', 'processing']);
 
+        const { data: historicalQuotes } = await supabase
+            .from('quotes')
+            .select('id, status, details, insurance_type, created_at')
+            .eq('conversation_id', conv.id)
+            .not('status', 'in', '("pending","in_progress")');
+
+        const { data: historicalClaims } = await supabase
+            .from('claims')
+            .select('id, status, details, description, created_at')
+            .eq('conversation_id', conv.id)
+            .not('status', 'in', '("pending","in_progress","processing")');
+
         clientContext = `
 CONTEXTE CLIENT :
 - Nom : ${conv.contact_name || 'Inconnu'}
 - Profil connu : ${JSON.stringify(conv.client_profile || {})}
-- Devis en cours : ${JSON.stringify(activeQuotes || [])}
-- Sinistres en cours : ${JSON.stringify(activeClaims || [])}
-Ne redemande jamais une information déjà connue.`;
+- Devis actifs : ${JSON.stringify(activeQuotes || [])}
+- Sinistres actifs : ${JSON.stringify(activeClaims || [])}
+- Historique Devis passés : ${JSON.stringify(historicalQuotes || [])}
+- Historique Sinistres passés : ${JSON.stringify(historicalClaims || [])}
+Ne redemande jamais une information déjà connue et fais référence aux dossiers passés si pertinent.`;
     }
 
     let msgBody = "";
@@ -455,12 +469,12 @@ async function handleIntent(convId, msgBody, aiResult) {
     else if (aiResult.action === 'cancel') status = 'cancelled';
 
     if (aiResult.intent === 'claim') {
-        console.log(`[Intent] Recherche d'un sinistre 'pending' ou 'in_progress'...`);
+        console.log(`[Intent] Recherche d'un sinistre actif ('pending', 'in_progress', ou 'processing')...`);
         const { data: existingClaims } = await supabase
             .from('claims')
             .select('id, details')
             .eq('conversation_id', convId)
-            .in('status', ['pending', 'in_progress'])
+            .in('status', ['pending', 'in_progress', 'processing'])
             .order('created_at', { ascending: false })
             .limit(1);
 
@@ -474,7 +488,7 @@ async function handleIntent(convId, msgBody, aiResult) {
                 details: mergedDetails,
                 status: status
             }).eq('id', existingClaim.id);
-            console.log(`[Intent] Sinistre existant mis à jour : ${existingClaim.id}`);
+            console.log(`[Intent] Sinistre existant mis à jour pour éviter les doublons : ${existingClaim.id}`);
         } else {
             const details = aiResult.data || {};
             if (!details.description && msgBody) details.description = msgBody;
@@ -489,12 +503,12 @@ async function handleIntent(convId, msgBody, aiResult) {
             console.log(`[Intent] Nouveau sinistre créé avec statut: ${status}`);
         }
     } else if (aiResult.intent === 'quote') {
-        console.log(`[Intent] Recherche d'un devis 'pending' ou 'in_progress'...`);
+        console.log(`[Intent] Recherche d'un devis actif ('pending', 'in_progress', ou 'sent')...`);
         const { data: existingQuotes } = await supabase
             .from('quotes')
             .select('id, details')
             .eq('conversation_id', convId)
-            .in('status', ['pending', 'in_progress'])
+            .in('status', ['pending', 'in_progress', 'sent'])
             .order('created_at', { ascending: false })
             .limit(1);
 
@@ -508,7 +522,7 @@ async function handleIntent(convId, msgBody, aiResult) {
                 status: status
             };
             await supabase.from('quotes').update(updatedQuote).eq('id', existingQuote.id);
-            console.log(`[Intent] Devis existant mis à jour : ${existingQuote.id}`);
+            console.log(`[Intent] Devis existant mis à jour pour éviter les doublons : ${existingQuote.id}`);
         } else {
             const newQuote = { 
                 conversation_id: convId, 

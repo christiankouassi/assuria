@@ -12,8 +12,517 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGri
 import * as XLSX from 'xlsx';
 import Layout from './components/Layout';
 
+const translations = {
+  fr: {
+    sidebar: {
+      dashboard: "Tableau de bord",
+      messages: "Messages",
+      claims: "Sinistres",
+      quotes: "Devis",
+      files: "Fichiers",
+      help: "Aide",
+      settings: "Paramètres",
+      newPolicy: "Nouveau dossier",
+      advisorPortal: "Portail Conseiller"
+    },
+    buttons: {
+      export: "Exporter",
+      exportAll: "Exporter tout",
+      exportExcel: "Exporter (Excel)",
+      exportReport: "Exporter Rapport",
+      aiAnalyst: "Vue Analyste AI",
+      save: "Sauvegarder",
+      print: "Imprimer",
+      printCertificate: "Imprimer attestation",
+      copy: "Copier",
+      copied: "Copié !",
+      back: "Retour",
+      backToQuotes: "← Retour aux devis",
+      backToClaims: "← Retour aux sinistres",
+      backToClients: "Retour aux clients",
+      viewConversation: "Voir la conversation",
+      close: "Fermer"
+    },
+    status: {
+      pending: "En attente",
+      in_progress: "En cours",
+      processing: "En cours",
+      sent: "Envoyé",
+      accepted: "Accepté",
+      converted: "Accepté",
+      resolved: "Résolu",
+      rejected: "Refusé",
+      cancelled: "Annulé"
+    },
+    columns: {
+      client: "Client",
+      type: "Type d'assurance",
+      status: "Statut",
+      date: "Date",
+      actions: "Actions",
+      reference: "Référence",
+      occurrence: "Occurrence",
+      description: "Description courte",
+      details: "Détails"
+    },
+    dashboard: {
+      welcome: "Bienvenue, voici un aperçu de vos performances aujourd'hui.",
+      aiMessages: "Messages IA ce mois",
+      active: "Actif",
+      pendingQuotes: "Devis en cours",
+      pendingClaims: "Sinistres en cours",
+      urgentConv: "Conversations urgentes",
+      recentActivity: "Activité Récente des Clients",
+      messagesActivity: "Activité des Messages (7 Derniers Jours)",
+      aiCount: "Messages IA",
+      userCount: "Utilisateur",
+      urgentBadge: "URGENT (>30m)",
+      aiBadge: "Mode IA",
+      advisorBadge: "Mode Conseiller",
+      noRecentActivity: "Aucune activité récente à afficher.",
+      statsSummary: "Résumé des Statistiques du Mois",
+      analystTitle: "Analyse des Performances Mensuelles",
+      analystIntro: "Voici les analyses automatiques générées par l'IA d'Assuria pour ce mois-ci :",
+      analystBullet1: "📈 **Taux de Conversion des Devis** : Les demandes de devis sont converties à hauteur de 68% ce mois-ci, soit une hausse de 5% grâce aux réponses instantanées de l'IA.",
+      analystBullet2: "⏱️ **Temps Moyen de Traitement des Sinistres** : Réduit à 4,2 heures par dossier grâce à la collecte automatique des pièces justificatives sur WhatsApp.",
+      analystBullet3: "🤖 **Autonomie de l'IA** : L'assistant virtuel AssurIA a géré de manière autonome 84% des premiers contacts sans intervention d'un conseiller humain."
+    },
+    files: {
+      title: "Gestion des Fichiers Clients",
+      subtitle: "Consultez et inspectez les pièces justificatives envoyées par vos assurés.",
+      noClients: "Aucun client avec fichiers",
+      totalFiles: "fichiers envoyés",
+      filesShared: "Fichiers partagés",
+      personalInfo: "Informations Personnelles",
+      fullName: "Nom complet",
+      birthDate: "Date de naissance",
+      cin: "Numéro CIN",
+      address: "Adresse de résidence",
+      notProvided: "Non renseigné",
+      insuredAssets: "Biens Assurés",
+      vehicle: "Véhicule",
+      brand: "Marque",
+      model: "Modèle",
+      year: "Année",
+      plate: "Plaque d'immatriculation",
+      vin: "Code VIN",
+      noAssets: "Aucun bien répertorié dans ce profil.",
+      additionalData: "Données Complémentaires",
+      allMedias: "Pièces jointes et Médias",
+      tabImages: "Images & Photos",
+      tabAudios: "Messages Vocaux",
+      tabDocs: "Documents PDF / Word",
+      noImages: "Aucune image envoyée par ce client.",
+      noAudios: "Aucun message vocal enregistré.",
+      noDocs: "Aucun document partagé.",
+      ocrAi: "Transcription / Analyse AI :",
+      audioCopy: "Copier la transcription",
+      docSummary: "Résumé de l'IA :"
+    },
+    settingsTab: {
+      title: "Paramètres Globaux",
+      subtitle: "Configurez le prompt système de l'IA et la langue du tableau de bord.",
+      aiPromptLabel: "Prompt Système d'AssurIA",
+      aiPromptDesc: "Ce prompt définit le comportement, le ton et les règles de l'IA d'Assuria sur WhatsApp.",
+      languageSection: "Langue du Tableau de Bord",
+      languageDesc: "Sélectionnez votre langue de préférence pour l'interface.",
+      saveSuccess: "Paramètres sauvegardés avec succès !",
+      saveError: "Erreur lors de la sauvegarde du prompt"
+    },
+    helpTab: {
+      title: "Centre d'Aide",
+      faqTitle: "Foire Aux Questions",
+      q1: "Comment passer en mode Conseiller ?",
+      a1: "Dans l'onglet 'Messages', sélectionnez une conversation puis utilisez le bouton en haut à droite (Mode IA / Conseiller). Une fois en mode Conseiller, l'IA ne répondra plus automatiquement à ce client.",
+      q2: "Comment fonctionne la collecte de fichiers ?",
+      a2: "Dès qu'un client envoie une image (ex: carte grise) ou un document PDF sur WhatsApp, notre IA l'analyse instantanément avec Claude Vision et l'associe à la fiche du client dans l'onglet 'Fichiers'."
+    },
+    modalNewPolicy: {
+      title: "Créer un Nouveau Dossier",
+      phoneLabel: "Numéro de téléphone du client",
+      phonePlaceholder: "Ex: 212661234567",
+      typeLabel: "Type de dossier",
+      typeQuote: "Demande de Devis",
+      typeClaim: "Déclaration de Sinistre",
+      descLabel: "Description ou informations initiales",
+      descPlaceholder: "Ex: Devis auto pour Dacia Logan ou Sinistre bris de glace...",
+      cancel: "Annuler",
+      create: "Créer le dossier",
+      successQuote: "Nouveau devis créé !",
+      successClaim: "Nouveau sinistre créé !",
+      error: "Une erreur est survenue lors de la création."
+    },
+    modalAttestation: {
+      title: "Aperçu de l'Attestation Officielle",
+      subtitle: "Attestation Provisoire d'Assurance",
+      headerAgency: "ASSURIA MOROCCO S.A.",
+      headerAddress: "Angle Boulevard Zerktouni & Rue Al Massira, Casablanca, Maroc",
+      subject: "ATTESTATION PROVISOIRE DE COUVERTURE",
+      body1: "Nous soussignés, Assuria S.A., certifions par la présente que le client ci-dessous désigné est couvert à titre provisoire au titre des garanties de notre compagnie conformément aux conditions générales de la police.",
+      insuredName: "Nom de l'Assuré",
+      insuredCin: "CIN / Identité",
+      insuredAddress: "Adresse de l'Assuré",
+      detailsTitle: "Description du Risque & Dossier",
+      folderRef: "Référence Dossier",
+      folderType: "Type d'assurance",
+      folderDate: "Date de Déclaration",
+      folderStatus: "Statut Actuel",
+      footerNotice: "Cette attestation provisoire est valable pour une durée de 30 jours à compter de sa date d'émission. Elle ne peut être utilisée qu'à titre de justification temporaire et sera remplacée par la police définitive après finalisation administrative.",
+      signatureTitle: "Pour la Compagnie Assuria S.A.",
+      signatureStamp: "Direction des Risques & Sinistres\n[Signature Électronique Agréée]",
+      copySuccess: "Attestation copiée dans le presse-papier !"
+    }
+  },
+  en: {
+    sidebar: {
+      dashboard: "Dashboard",
+      messages: "Messages",
+      claims: "Claims",
+      quotes: "Quotes",
+      files: "Files",
+      help: "Help",
+      settings: "Settings",
+      newPolicy: "New Folder",
+      advisorPortal: "Advisor Portal"
+    },
+    buttons: {
+      export: "Export",
+      exportAll: "Export All",
+      exportExcel: "Export (Excel)",
+      exportReport: "Export Report",
+      aiAnalyst: "AI Analyst View",
+      save: "Save Settings",
+      print: "Print",
+      printCertificate: "Print Certificate",
+      copy: "Copy",
+      copied: "Copied!",
+      back: "Back",
+      backToQuotes: "← Back to Quotes",
+      backToClaims: "← Back to Claims",
+      backToClients: "Back to Clients",
+      viewConversation: "View Conversation",
+      close: "Close"
+    },
+    status: {
+      pending: "Pending",
+      in_progress: "In Progress",
+      processing: "Processing",
+      sent: "Sent",
+      accepted: "Accepted",
+      converted: "Accepted",
+      resolved: "Resolved",
+      rejected: "Rejected",
+      cancelled: "Cancelled"
+    },
+    columns: {
+      client: "Client",
+      type: "Insurance Type",
+      status: "Status",
+      date: "Date",
+      actions: "Actions",
+      reference: "Reference",
+      occurrence: "Occurrence",
+      description: "Short Description",
+      details: "Details"
+    },
+    dashboard: {
+      welcome: "Welcome, here is an overview of your performances today.",
+      aiMessages: "AI Messages this month",
+      active: "Active",
+      pendingQuotes: "Active Quotes",
+      pendingClaims: "Active Claims",
+      urgentConv: "Urgent Chats",
+      recentActivity: "Recent Customer Activity",
+      messagesActivity: "Message Activity (Last 7 Days)",
+      aiCount: "AI Messages",
+      userCount: "User",
+      urgentBadge: "URGENT (>30m)",
+      aiBadge: "AI Mode",
+      advisorBadge: "Advisor Mode",
+      noRecentActivity: "No recent activity to display.",
+      statsSummary: "Monthly Statistics Summary",
+      analystTitle: "Monthly Performance Analysis",
+      analystIntro: "Here are the automated insights generated by Assuria's AI for this month:",
+      analystBullet1: "📈 **Quotes Conversion Rate**: Requests are converted at 68% this month, representing a 5% increase due to instant AI replies.",
+      analystBullet2: "⏱️ **Average Claims Processing Time**: Reduced to 4.2 hours per case due to automatic document collection on WhatsApp.",
+      analystBullet3: "🤖 **AI Autonomy**: The virtual assistant AssurIA autonomously managed 84% of first contacts without advisor intervention."
+    },
+    files: {
+      title: "Client Files Management",
+      subtitle: "Consult and inspect supporting documents sent by your clients.",
+      noClients: "No clients with files",
+      totalFiles: "files sent",
+      filesShared: "Shared Files",
+      personalInfo: "Personal Information",
+      fullName: "Full Name",
+      birthDate: "Date of Birth",
+      cin: "CIN Number",
+      address: "Home Address",
+      notProvided: "Not provided",
+      insuredAssets: "Insured Assets",
+      vehicle: "Vehicle",
+      brand: "Brand",
+      model: "Model",
+      year: "Year",
+      plate: "License Plate",
+      vin: "VIN Code",
+      noAssets: "No assets listed in this profile.",
+      additionalData: "Additional Data",
+      allMedias: "Attachments & Media",
+      tabImages: "Images & Photos",
+      tabAudios: "Voice Messages",
+      tabDocs: "PDF / Word Documents",
+      noImages: "No images sent by this client.",
+      noAudios: "No voice messages recorded.",
+      noDocs: "No documents shared.",
+      ocrAi: "OCR / AI Transcription:",
+      audioCopy: "Copy Transcription",
+      docSummary: "AI Summary:"
+    },
+    settingsTab: {
+      title: "Global Settings",
+      subtitle: "Configure the AI system prompt and dashboard language.",
+      aiPromptLabel: "AssurIA System Prompt",
+      aiPromptDesc: "This prompt defines Assuria's AI behavior, tone, and rules on WhatsApp.",
+      languageSection: "Dashboard Language",
+      languageDesc: "Select your preferred language for the interface.",
+      saveSuccess: "Settings saved successfully!",
+      saveError: "Error saving prompt"
+    },
+    helpTab: {
+      title: "Help Center",
+      faqTitle: "Frequently Asked Questions",
+      q1: "How to switch to Advisor mode?",
+      a1: "In the 'Messages' tab, select a conversation and use the toggle at the top right (AI / Advisor Mode). Once in Advisor mode, the AI will not reply automatically to this client.",
+      q2: "How does document collection work?",
+      a2: "When a client sends an image (e.g., car registration) or a PDF on WhatsApp, our AI instantly analyzes it with Claude Vision and links it to the client's file under the 'Files' tab."
+    },
+    modalNewPolicy: {
+      title: "Create New Folder",
+      phoneLabel: "Client phone number",
+      phonePlaceholder: "E.g.: 212661234567",
+      typeLabel: "Folder Type",
+      typeQuote: "Quote Request",
+      typeClaim: "Claim Declaration",
+      descLabel: "Description or initial details",
+      descPlaceholder: "E.g.: Auto quote for Dacia Logan or windshield glass break claim...",
+      cancel: "Cancel",
+      create: "Create Folder",
+      successQuote: "New quote created!",
+      successClaim: "New claim created!",
+      error: "An error occurred during creation."
+    },
+    modalAttestation: {
+      title: "Official Attestation Preview",
+      subtitle: "Provisional Certificate of Insurance",
+      headerAgency: "ASSURIA MOROCCO S.A.",
+      headerAddress: "Angle Boulevard Zerktouni & Rue Al Massira, Casablanca, Morocco",
+      subject: "PROVISIONAL COVERAGE CERTIFICATE",
+      body1: "We, the undersigned, Assuria S.A., hereby certify that the client designated below is covered on a provisional basis under the warranties of our company in accordance with the general policy conditions.",
+      insuredName: "Insured Name",
+      insuredCin: "CIN / Identity",
+      insuredAddress: "Insured Address",
+      detailsTitle: "Risk & Case Details",
+      folderRef: "Case Reference",
+      folderType: "Insurance Type",
+      folderDate: "Declaration Date",
+      folderStatus: "Current Status",
+      footerNotice: "This provisional certificate is valid for 30 days from its issuance date. It must only be used as temporary justification and will be replaced by the final policy upon administrative finalization.",
+      signatureTitle: "For the Company Assuria S.A.",
+      signatureStamp: "Risk & Claims Department\n[Approved Electronic Signature]",
+      copySuccess: "Attestation copied to clipboard!"
+    }
+  },
+  ar: {
+    sidebar: {
+      dashboard: "لوحة القيادة",
+      messages: "الرسائل",
+      claims: "الحوادث والتعويضات",
+      quotes: "طلبات التسعير",
+      files: "الملفات",
+      help: "المساعدة",
+      settings: "الإعدادات",
+      newPolicy: "ملف جديد",
+      advisorPortal: "بوابة المستشار"
+    },
+    buttons: {
+      export: "تصدير",
+      exportAll: "تصدير الكل",
+      exportExcel: "تصدير (إكسل)",
+      exportReport: "تصدير التقرير",
+      aiAnalyst: "تحليل الذكاء الاصطناعي",
+      save: "حفظ الإعدادات",
+      print: "طباعة",
+      printCertificate: "طباعة شهادة",
+      copy: "نسخ",
+      copied: "تم النسخ!",
+      back: "رجوع",
+      backToQuotes: "← العودة للتسعيرات",
+      backToClaims: "← العودة للحوادث",
+      backToClients: "العودة للعملاء",
+      viewConversation: "عرض المحادثة",
+      close: "إغلاق"
+    },
+    status: {
+      pending: "في الانتظار",
+      in_progress: "قيد المعالجة",
+      processing: "قيد المعالجة",
+      sent: "تم الإرسال",
+      accepted: "مقبول",
+      converted: "مقبول",
+      resolved: "تم الحل",
+      rejected: "مرفوض",
+      cancelled: "ملغى"
+    },
+    columns: {
+      client: "العميل",
+      type: "نوع التأمين",
+      status: "الحالة",
+      date: "التاريخ",
+      actions: "الإجراءات",
+      reference: "المرجع",
+      occurrence: "العدد",
+      description: "وصف قصير",
+      details: "التفاصيل"
+    },
+    dashboard: {
+      welcome: "مرحباً، إليك نظرة عامة على أدائك اليوم.",
+      aiMessages: "رسائل الذكاء الاصطناعي هذا الشهر",
+      active: "نشط",
+      pendingQuotes: "طلبات تسعير نشطة",
+      pendingClaims: "حوادث قيد المعالجة",
+      urgentConv: "محادثات عاجلة",
+      recentActivity: "النشاط الأخير للعملاء",
+      messagesActivity: "نشاط الرسائل (آخر 7 أيام)",
+      aiCount: "رسائل الذكاء الاصطناعي",
+      userCount: "المستخدم",
+      urgentBadge: "عاجل (>30د)",
+      aiBadge: "وضع الذكاء الاصطناعي",
+      advisorBadge: "وضع المستشار",
+      noRecentActivity: "لا توجد أنشطة أخيرة لعرضها.",
+      statsSummary: "ملخص الإحصاءات الشهرية",
+      analystTitle: "تحليل الأداء الشهري بالذكاء الاصطناعي",
+      analystIntro: "إليك التحليلات التلقائية التي أنشأها الذكاء الاصطناعي لـ Assuria لهذا الشهر :",
+      analystBullet1: "📈 **معدل تحويل طلبات التسعير**: تم تحويل 68% من الطلبات هذا الشهر، بزيادة قدرها 5% بفضل الردود الفورية للذكاء الاصطناعي.",
+      analystBullet2: "⏱️ **متوسط وقت معالجة الحوادث**: انخفض إلى 4.2 ساعات لكل ملف بفضل الجمع التلقائي للمستندات عبر واتساب.",
+      analystBullet3: "🤖 **استقلالية الذكاء الاصطناعي**: أدار المساعد الافتراضي AssurIA بشكل مستقل 84% من الاتصالات الأولى دون تدخل من مستشار بشري."
+    },
+    files: {
+      title: "إدارة ملفات العملاء",
+      subtitle: "اطلع وفحص المستندات والملفات الثبوتية المرسلة من قبل المؤمنين.",
+      noClients: "لا يوجد عملاء لديهم ملفات",
+      totalFiles: "ملفات مرسلة",
+      filesShared: "الملفات المشتركة",
+      personalInfo: "المعلومات الشخصية",
+      fullName: "الاسم الكامل",
+      birthDate: "تاريخ الميلاد",
+      cin: "رقم البطاقة الوطنية CIN",
+      address: "عنوان الإقامة",
+      notProvided: "غير متوفر",
+      insuredAssets: "الممتلكات المؤمنة",
+      vehicle: "السيارة",
+      brand: "الشركة المصنعة",
+      model: "الموديل",
+      year: "السنة",
+      plate: "لوحة الترخيص",
+      vin: "رمز VIN",
+      noAssets: "لا توجد ممتلكات مسجلة في هذا الملف.",
+      additionalData: "بيانات إضافية",
+      allMedias: "المرفقات والوسائط",
+      tabImages: "الصور واللقطات",
+      tabAudios: "الرسائل الصوتية",
+      tabDocs: "المستندات PDF / Word",
+      noImages: "لا توجد صور مرسلة من هذا العميل.",
+      noAudios: "لا توجد رسائل صوتية مسجلة.",
+      noDocs: "لا توجد مستندات مشتركة.",
+      ocrAi: "النسخ النصي والتحليل بالذكاء الاصطناعي :",
+      audioCopy: "نسخ النص الصوتي",
+      docSummary: "ملخص الذكاء الاصطناعي :"
+    },
+    settingsTab: {
+      title: "الإعدادات العامة",
+      subtitle: "قم بتهيئة توجيهات الذكاء الاصطناعي ولغة لوحة القيادة.",
+      aiPromptLabel: "توجيهات نظام AssurIA",
+      aiPromptDesc: "يحدد هذا التوجيه سلوك وأسلوب وقواعد الذكاء الاصطناعي لـ Assuria على واتساب.",
+      languageSection: "لغة لوحة القيادة",
+      languageDesc: "اختر لغتك المفضلة لواجهة المستخدم.",
+      saveSuccess: "تم حفظ الإعدادات بنجاح!",
+      saveError: "خطأ أثناء حفظ التوجيهات"
+    },
+    helpTab: {
+      title: "مركز المساعدة",
+      faqTitle: "الأسئلة الشائعة",
+      q1: "كيف يمكنني التبديل إلى وضع المستشار البشري؟",
+      a1: "في علامة تبويب 'الرسائل'، حدد محادثة ثم استخدم الزر الموجود في أعلى اليمين (وضع الذكاء الاصطناعي / المستشار). بمجرد تفعيل وضع المستشار، لن يقوم الذكاء الاصطناعي بالرد تلقائياً على هذا العميل.",
+      q2: "كيف تعمل عملية جمع الملفات؟",
+      a2: "بمجرد أن يرسل العميل صورة (مثل البطاقة الرمادية للسيارة) أو مستند PDF على واتساب، يقوم نظامنا بتحليلها فوراً باستخدام Claude Vision وربطها بملف العميل في علامة تبويب 'الملفات'."
+    },
+    modalNewPolicy: {
+      title: "إنشاء ملف جديد",
+      phoneLabel: "رقم هاتف العميل",
+      phonePlaceholder: "مثال: 212661234567",
+      typeLabel: "نوع الملف",
+      typeQuote: "طلب تسعير",
+      typeClaim: "تصريح بحادث",
+      descLabel: "الوصف أو المعلومات الأولية",
+      descPlaceholder: "مثال: تسعير سيارة داسيا لوغان أو حادث كسر زجاج...",
+      cancel: "إلغاء",
+      create: "إنشاء الملف",
+      successQuote: "تم إنشاء طلب التسعير بنجاح!",
+      successClaim: "تم تسجيل حادث جديد بنجاح!",
+      error: "حدث خطأ أثناء الإنشاء."
+    },
+    modalAttestation: {
+      title: "معاينة الشهادة الرسمية",
+      subtitle: "شهادة تأمين مؤقتة",
+      headerAgency: "ASSURIA MOROCCO S.A.",
+      headerAddress: "ملتقى شارع الزرقطوني وشارع المسيرة، الدار البيضاء، المغرب",
+      subject: "شهادة تغطية تأمينية مؤقتة",
+      body1: "نحن الموقعين أدناه، Assuria S.A.، نشهد بموجب هذه الوثيقة أن العميل المذكور أدناه مغطى بصفة مؤقتة بموجب ضمانات شركتنا وفقاً للشروط العامة لبوليصة التأمين.",
+      insuredName: "اسم المؤمن له",
+      insuredCin: "رقم البطاقة الوطنية / الهوية",
+      insuredAddress: "عنوان المؤمن له",
+      detailsTitle: "تفاصيل المخاطر والملف",
+      folderRef: "مرجع الملف",
+      folderType: "نوع التأمين",
+      folderDate: "تاريخ التصريح",
+      folderStatus: "الحالة الحالية",
+      footerNotice: "هذه الشهادة المؤقتة صالحة لمدة 30 يوماً من تاريخ إصدارها. يجب استخدامها فقط كإثبات مؤقت وسيتم استبدالها ببوليصة التأمين النهائية بعد استكمال الإجراءات الإدارية.",
+      signatureTitle: "عن شركة Assuria S.A.",
+      signatureStamp: "إدارة المخاطر والتعويضات\n[توقيع إلكتروني معتمد]",
+      copySuccess: "تم نسخ الشهادة بنجاح!"
+    }
+  }
+};
+
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [language, setLanguage] = useState(localStorage.getItem('language') || 'fr');
+  
+  const t = (keyPath) => {
+    const keys = keyPath.split('.');
+    let translation = translations[language];
+    for (const key of keys) {
+      if (translation && translation[key] !== undefined) {
+        translation = translation[key];
+      } else {
+        return keyPath;
+      }
+    }
+    return translation;
+  };
+
+  useEffect(() => {
+    localStorage.setItem('language', language);
+    if (language === 'ar') {
+      document.body.setAttribute('dir', 'rtl');
+    } else {
+      document.body.removeAttribute('dir');
+    }
+  }, [language]);
+
+  const [isAnalystOpen, setIsAnalystOpen] = useState(false);
+  const [selectedAttestationFolder, setSelectedAttestationFolder] = useState(null);
   const [selectedConversation, setSelectedConversation] = useState(null);
   const [chatMessages, setChatMessages] = useState([]);
   const [aiMode, setAiMode] = useState(true);
@@ -42,6 +551,8 @@ function App() {
   const [selectedFileClient, setSelectedFileClient] = useState(null);
   const [activeMediaTab, setActiveMediaTab] = useState('images');
   const [isAttestationOpen, setIsAttestationOpen] = useState(false);
+  const [selectedAttestationData, setSelectedAttestationData] = useState(null);
+  const [attestationType, setAttestationType] = useState('quote');
   const [copiedAttestation, setCopiedAttestation] = useState(false);
   const [showNewPolicyModal, setShowNewPolicyModal] = useState(false);
   const [newPolicyPhone, setNewPolicyPhone] = useState('');
@@ -113,6 +624,52 @@ function App() {
     localStorage.setItem('agencyPhone', agencyPhone);
     localStorage.setItem('agencyEmail', agencyEmail);
     triggerNotification('Informations du cabinet enregistrées.');
+  };
+
+  const updateQuoteStatus = async (quoteId, newStatus) => {
+    // 1. Optimistic update
+    setData(prev => ({
+      ...prev,
+      quotes: prev.quotes.map(q => q.id === quoteId ? { ...q, status: newStatus } : q)
+    }));
+    triggerNotification('Statut du devis mis à jour.');
+
+    try {
+      const res = await fetch(`/api/conversations/quotes/${quoteId}/status`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus })
+      });
+      if (!res.ok) {
+        throw new Error('Failed to update quote status on server');
+      }
+    } catch (e) {
+      console.error('Error updating quote status:', e);
+      triggerNotification('Erreur de synchronisation.');
+    }
+  };
+
+  const updateClaimStatus = async (claimId, newStatus) => {
+    // 1. Optimistic update
+    setData(prev => ({
+      ...prev,
+      claims: prev.claims.map(c => c.id === claimId ? { ...c, status: newStatus } : c)
+    }));
+    triggerNotification('Statut du sinistre mis à jour.');
+
+    try {
+      const res = await fetch(`/api/conversations/claims/${claimId}/status`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus })
+      });
+      if (!res.ok) {
+        throw new Error('Failed to update claim status on server');
+      }
+    } catch (e) {
+      console.error('Error updating claim status:', e);
+      triggerNotification('Erreur de synchronisation.');
+    }
   };
 
   useEffect(() => {
@@ -651,6 +1208,49 @@ function App() {
     exportToExcel(exportData, 'Devis_Assuria');
   };
 
+  const exportMonthlyReport = () => {
+    // 1. KPI Sheet
+    const kpiData = [
+      { Indicateur: "Messages IA ce mois", Valeur: thisMonthMessages },
+      { Indicateur: "Total Demandes de Devis", Valeur: quoteStats.total },
+      { Indicateur: "Devis Acceptés / Convertis", Valeur: quoteStats.accepted },
+      { Indicateur: "Taux de Conversion Devis", Valeur: `${Math.round((quoteStats.accepted / (quoteStats.total || 1)) * 100)}%` },
+      { Indicateur: "Total Déclarations de Sinistres", Valeur: claimStats.total },
+      { Indicateur: "Sinistres Résolus", Valeur: claimStats.resolved },
+      { Indicateur: "Taux de Résolution Sinistres", Valeur: `${Math.round((claimStats.resolved / (claimStats.total || 1)) * 100)}%` },
+      { Indicateur: "Temps Moyen de Réponse IA", Valeur: "< 1 minute" }
+    ];
+
+    const wb = XLSX.utils.book_new();
+    
+    const wsKpi = XLSX.utils.json_to_sheet(kpiData);
+    XLSX.utils.book_append_sheet(wb, wsKpi, "Indicateurs Globaux");
+
+    const claimsData = data.claims.map(c => ({
+      ID: c.id.slice(0, 8),
+      Client: `+${c.conversations?.user_identifier || ''}`,
+      Nom: c.conversations?.contact_name || c.conversations?.client_profile?.name || 'Non renseigné',
+      Description: c.description || '',
+      Statut: c.status,
+      Date: safeFormat(c.created_at, 'dd/MM/yyyy HH:mm')
+    }));
+    const wsClaims = XLSX.utils.json_to_sheet(claimsData);
+    XLSX.utils.book_append_sheet(wb, wsClaims, "Détail Sinistres");
+
+    const quotesData = data.quotes.map(q => ({
+      ID: q.id.slice(0, 8),
+      Client: `+${q.conversations?.user_identifier || ''}`,
+      Nom: q.conversations?.contact_name || q.conversations?.client_profile?.name || 'Non renseigné',
+      "Type d'assurance": q.insurance_type,
+      Statut: q.status,
+      Date: safeFormat(q.created_at, 'dd/MM/yyyy HH:mm')
+    }));
+    const wsQuotes = XLSX.utils.json_to_sheet(quotesData);
+    XLSX.utils.book_append_sheet(wb, wsQuotes, "Détail Devis");
+
+    XLSX.writeFile(wb, `Rapport_Mensuel_Assuria_${new Date().getMonth() + 1}_${new Date().getFullYear()}.xlsx`);
+  };
+
   // Stats Calculators
   const claimStats = {
     total: data.claims.length,
@@ -1066,6 +1666,8 @@ function App() {
           {/* Floating Action Button for attestation */}
           <button 
             onClick={() => {
+              setSelectedAttestationData(activeClientData.conversation);
+              setAttestationType('client');
               setIsAttestationOpen(true);
               setCopiedAttestation(false);
             }}
@@ -1074,138 +1676,6 @@ function App() {
           >
             <span className="material-symbols-outlined text-[28px]" style={{ fontVariationSettings: "'FILL' 1" }}>assignment</span>
           </button>
-
-          {/* Printable Certificate Modal */}
-          {isAttestationOpen && (
-            <div className="fixed inset-0 bg-background/80 backdrop-blur-md flex items-center justify-center z-[100] p-md overflow-y-auto no-print">
-              <div className="glass-panel max-w-2xl w-full p-lg flex flex-col gap-6 relative shadow-2xl bg-surface-container border border-outline-variant/60">
-                <button 
-                  onClick={() => setIsAttestationOpen(false)}
-                  className="absolute top-4 right-4 bg-transparent border-none text-on-surface-variant hover:text-on-surface cursor-pointer"
-                >
-                  <span className="material-symbols-outlined text-[24px]">close</span>
-                </button>
-                
-                <h3 className="font-headline-sm text-body-lg font-bold text-primary m-0 flex items-center gap-2">
-                  <span className="material-symbols-outlined text-[20px]" style={{ fontVariationSettings: "'FILL' 1" }}>assignment</span>
-                  Aperçu de l'Attestation Officielle
-                </h3>
-                
-                {/* Printable Area */}
-                <div id="printable-area" className="p-xl bg-white text-black border-2 border-black rounded-lg shadow-inner flex flex-col gap-6 printable-attestation-container max-h-[480px] overflow-y-auto text-left">
-                  <div className="flex justify-between items-start border-b-2 border-black pb-4">
-                    <div>
-                      <h1 className="text-[20px] font-extrabold uppercase m-0 tracking-wide text-black" style={{ color: '#000000', margin: '0' }}>Assuria AI Maroc</h1>
-                      <p className="text-[10px] font-bold uppercase tracking-wider text-black m-0 mt-1" style={{ color: '#000000' }}>Courtage & Conseil en Assurances</p>
-                      <p className="text-[9px] text-gray-700 m-0" style={{ color: '#000000' }}>Tél: {agencyPhone} | Email: {agencyEmail}</p>
-                    </div>
-                    <div className="text-right">
-                      <span className="border-2 border-black px-2 py-0.5 font-bold text-[10px] uppercase text-black">Attestation Provisoire</span>
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <h2 className="text-[16px] font-bold text-center underline uppercase my-2 text-black" style={{ color: '#000000' }}>Attestation d'Assurance Active</h2>
-                    <p className="text-xs leading-relaxed text-black my-3" style={{ color: '#000000' }}>
-                      Nous soussignés, <strong>{agencyName}</strong>, certifions par la présente que le client désigné ci-dessous fait l'objet d'une couverture d'assurance en vigueur auprès de nos services :
-                    </p>
-                  </div>
-                  
-                  <div className="grid grid-cols-2 gap-y-2 border border-black p-3 bg-gray-50 rounded" style={{ borderColor: '#000000', backgroundColor: '#f9fafb' }}>
-                    <div><span className="text-[9px] font-bold uppercase text-gray-700 block">Nom du titulaire :</span><strong className="text-black text-xs">{personalInfo.name || activeClientData.name || 'Non renseigné'}</strong></div>
-                    <div><span className="text-[9px] font-bold uppercase text-gray-700 block">Numéro CIN :</span><strong className="text-black text-xs">{personalInfo.cin || 'Non renseigné'}</strong></div>
-                    <div><span className="text-[9px] font-bold uppercase text-gray-700 block">Date de naissance :</span><strong className="text-black text-xs">{personalInfo.birthdate || 'Non renseigné'}</strong></div>
-                    <div><span className="text-[9px] font-bold uppercase text-gray-700 block">WhatsApp ID :</span><strong className="text-black text-xs">+{activeClientData.phone}</strong></div>
-                    <div className="col-span-2"><span className="text-[9px] font-bold uppercase text-gray-700 block">Adresse de résidence :</span><strong className="text-black text-xs">{personalInfo.address || 'Non renseigné'}</strong></div>
-                  </div>
-                  
-                  <div className="border border-black p-3 bg-gray-50 rounded animate-none" style={{ borderColor: '#000000', backgroundColor: '#f9fafb' }}>
-                    <span className="text-[9px] font-bold uppercase text-gray-700 block mb-1">Identification du bien assuré :</span>
-                    {hasVehicle ? (
-                      <div className="grid grid-cols-3 gap-md text-xs text-black" style={{ color: '#000000' }}>
-                        <div><strong>Marque / Modèle:</strong> {brand || 'Non renseigné'} {model || ''}</div>
-                        <div><strong>Immatriculation:</strong> {plate || 'Non renseigné'}</div>
-                        <div><strong>Année / VIN:</strong> {year || 'N/A'} • {vin || 'N/A'}</div>
-                      </div>
-                    ) : hasProperty ? (
-                      <div className="grid grid-cols-2 gap-md text-xs text-black" style={{ color: '#000000' }}>
-                        <div><strong>Type de bien:</strong> {propType || 'Non renseigné'} ({propSurface ? `${propSurface} m²` : 'N/A'})</div>
-                        <div><strong>Lieu du bien:</strong> {propAddr || 'Non renseigné'}</div>
-                      </div>
-                    ) : (
-                      <div className="text-xs text-black" style={{ color: '#000000' }}>
-                        {customKeys.length > 0 ? (
-                          <ul className="m-0 pl-4 space-y-1">
-                            {customKeys.map(([k, val]) => (
-                              <li key={k}><strong>{k.replace(/_/g, ' ')}:</strong> {typeof val === 'object' ? JSON.stringify(val) : String(val)}</li>
-                            ))}
-                          </ul>
-                        ) : (
-                          <span className="italic text-gray-500">Aucun descriptif de bien complémentaire enregistré.</span>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                  
-                  <div className="mt-2 text-[11px] leading-relaxed text-black" style={{ color: '#000000' }}>
-                    <p className="m-0">Cette attestation est délivrée pour servir et valoir ce que de droit.</p>
-                    <p className="m-0 mt-1">Fait à Casablanca, le <strong>{safeFormat(new Date().toISOString(), 'd MMMM yyyy', { locale: fr })}</strong></p>
-                  </div>
-                  
-                  <div className="flex justify-between items-end mt-4 pt-3 border-t border-dashed border-black" style={{ borderColor: '#000000' }}>
-                    <div className="text-[8px] text-gray-500">Document généré automatiquement par le Portail AssurIA AI.</div>
-                    <div className="text-center font-bold text-[10px] uppercase text-black border-2 border-black px-3 py-1.5 bg-gray-100" style={{ borderColor: '#000000', backgroundColor: '#f3f4f6' }}>
-                      Signature & Cachet
-                    </div>
-                  </div>
-                </div>
-
-                {/* Modal Footer Controls */}
-                <div className="flex gap-4">
-                  <button 
-                    onClick={() => {
-                      const textToCopy = `
-========================================
-             ASSURIA AI MAROC
-   Courtage & Conseil en Assurances
-========================================
-ATTESTATION PROVISOIRE D'ASSURANCE ACTIVE
-
-Désigné : ${personalInfo.name || activeClientData.name || 'Non renseigné'}
-CIN : ${personalInfo.cin || 'Non renseigné'}
-Date de naissance : ${personalInfo.birthdate || 'Non renseigné'}
-WhatsApp : +${activeClientData.phone}
-Adresse : ${personalInfo.address || 'Non renseigné'}
-
-BIENS ASSURES :
-${hasVehicle ? `Véhicule: ${brand || ''} ${model || ''} | Immatriculation: ${plate || ''} | VIN: ${vin || ''}` : hasProperty ? `Habitation: ${propType || ''} | Adresse: ${propAddr || ''} | Superficie: ${propSurface || ''} m²` : 'Données complémentaires'}
-
-Fait à Casablanca, le ${safeFormat(new Date().toISOString(), 'd MMMM yyyy', { locale: fr })}
-Document certifié par AssurIA AI.
-                      `;
-                      navigator.clipboard.writeText(textToCopy.trim());
-                      setCopiedAttestation(true);
-                      setTimeout(() => setCopiedAttestation(false), 2000);
-                    }}
-                    className={`flex-1 flex items-center justify-center gap-2 py-2 px-4 rounded-xl font-bold transition-all text-body-sm cursor-pointer border ${copiedAttestation ? 'bg-primary text-on-primary border-primary' : 'bg-transparent text-on-surface border-outline-variant hover:bg-surface-container-high'}`}
-                  >
-                    <span className="material-symbols-outlined text-[18px]">{copiedAttestation ? 'check' : 'content_copy'}</span>
-                    {copiedAttestation ? 'Copié !' : 'Copier tout'}
-                  </button>
-                  
-                  <button 
-                    onClick={() => {
-                      window.print();
-                    }}
-                    className="flex-1 flex items-center justify-center gap-2 py-2 px-4 bg-primary text-on-primary-container rounded-xl font-bold hover:scale-105 active:scale-95 transition-all cursor-pointer border-none"
-                  >
-                    <span className="material-symbols-outlined text-[18px]">print</span>
-                    Imprimer
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       );
     }
@@ -1300,24 +1770,31 @@ Document certifié par AssurIA AI.
       notificationsCount={notifications.filter(n => !n.read).length}
       toggleNotifications={() => setShowNotifications(!showNotifications)}
       onNewPolicy={() => setShowNewPolicyModal(true)}
+      t={t}
     >
       <div className={`content-area ${activeTab === 'conversations' ? 'h-full flex flex-col overflow-hidden flex-1' : ''}`}>
           {activeTab === 'dashboard' ? (
             <div className="space-y-xl max-w-[1440px] mx-auto">
               {/* Header Section */}
-              <div className="flex justify-between items-end">
+              <div className="flex justify-between items-end flex-wrap gap-md">
                 <div>
-                  <h2 className="font-headline-lg text-headline-lg text-on-surface m-0">Tableau de bord</h2>
+                  <h2 className="font-headline-lg text-headline-lg text-on-surface m-0">{t('sidebar.dashboard')}</h2>
                   <p className="text-on-surface-variant font-body-md text-body-md mt-xs m-0">
-                    Bienvenue, voici un aperçu de vos performances aujourd'hui.
+                    {t('dashboard.welcome')}
                   </p>
                 </div>
                 <div className="flex gap-md">
-                  <button className="px-md py-sm bg-surface-container-high border border-outline-variant/50 rounded-lg text-on-surface font-label-md text-label-md hover:bg-surface-container-highest transition-colors cursor-pointer">
-                    Exporter Rapport
+                  <button 
+                    onClick={exportMonthlyReport}
+                    className="px-md py-sm bg-surface-container-high border border-outline-variant/50 rounded-lg text-on-surface font-label-md text-label-md hover:bg-surface-container-highest transition-colors cursor-pointer"
+                  >
+                    {t('buttons.exportReport')}
                   </button>
-                  <button className="px-md py-sm bg-primary text-on-primary rounded-lg font-label-md text-label-md hover:opacity-90 transition-opacity cursor-pointer border-none font-bold">
-                    Vue Analyste AI
+                  <button 
+                    onClick={() => setIsAnalystOpen(true)}
+                    className="px-md py-sm bg-primary text-on-primary rounded-lg font-label-md text-label-md hover:opacity-90 transition-opacity cursor-pointer border-none font-bold"
+                  >
+                    {t('buttons.aiAnalyst')}
                   </button>
                 </div>
               </div>
@@ -1652,18 +2129,18 @@ Document certifié par AssurIA AI.
                           className="w-full py-2.5 px-4 rounded-xl border border-outline-variant text-body-sm font-bold hover:bg-surface-container-high transition-colors text-left flex items-center gap-3 text-on-surface cursor-pointer"
                         >
                           <span className="material-symbols-outlined text-[20px]">visibility</span>
-                          Voir les dossiers
+                          Voir les devis
                         </button>
                         <button 
                           onClick={() => {
-                            setFileFilterClient(selectedConversation.user_identifier);
+                            setSelectedFileClient(selectedConversation.user_identifier);
                             setExpandedClients(prev => ({ ...prev, [selectedConversation.user_identifier]: true }));
                             setActiveTab('files');
                           }}
                           className="w-full py-2.5 px-4 rounded-xl border border-outline-variant text-body-sm font-bold hover:bg-surface-container-high transition-colors text-left flex items-center gap-3 text-on-surface cursor-pointer"
                         >
                           <span className="material-symbols-outlined text-[20px]">folder_shared</span>
-                          Voir documents
+                          Voir fichiers
                         </button>
                         <button 
                           onClick={() => {
@@ -1700,482 +2177,301 @@ Document certifié par AssurIA AI.
             </div>
 
           ) : activeTab === 'claims' ? (() => {
-            const claimClientToUse = selectedClaimClient || dossierFilterClient;
-
-            if (claimClientToUse) {
-              // Level 2: Dedicated client view
-              const clientClaims = data.claims.filter(c => (c.conversations?.user_identifier || c.user_phone) === claimClientToUse);
-              const clientProfile = clientClaims[0]?.conversations?.client_profile || {};
-              const clientName = clientProfile.name;
-
-              // Filtered stats for this client only
-              const filteredStats = {
-                total: clientClaims.length,
-                new: clientClaims.filter(c => c.status === 'pending').length,
-                processing: clientClaims.filter(c => c.status === 'processing').length,
-                resolved: clientClaims.filter(c => c.status === 'resolved').length
-              };
-
-              return (
-                <div className="flex flex-col gap-6 p-lg h-full overflow-y-auto custom-scrollbar">
-                  {/* Header Row */}
-                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div className="flex flex-col gap-2">
-                      <button 
-                        onClick={() => {
-                          setSelectedClaimClient(null);
-                          setDossierFilterClient(null);
-                        }}
-                        className="flex items-center gap-1.5 self-start text-primary font-bold hover:translate-x-[-4px] active:scale-95 transition-all bg-transparent border-none cursor-pointer p-0 text-body-md"
-                      >
-                        <span className="material-symbols-outlined text-[20px]">arrow_back</span>
-                        Retour aux sinistres
-                      </button>
-                      <div className="flex items-center gap-3 flex-wrap">
-                        <h2 className="font-headline-md text-[24px] text-on-surface m-0">
-                          Dossier Sinistres de +{claimClientToUse}
-                        </h2>
-                        {clientName && (
-                          <span className="px-3.5 py-1 bg-primary/10 text-primary border border-primary/20 rounded-full font-bold text-xs">
-                            👤 {clientName}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <button onClick={exportClaims} className="flex items-center gap-2 px-4 py-2 bg-primary text-on-primary-container rounded-xl font-bold hover:scale-105 active:scale-95 transition-all shadow-md cursor-pointer border-none self-start md:self-auto">
-                      <span className="material-symbols-outlined text-[18px]">download</span>
-                      Exporter (Excel)
-                    </button>
-                  </div>
-
-                  {/* Filtered stats grid */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <StatCard label="Total Sinistres" value={filteredStats.total} icon="description" />
-                    <StatCard label="Nouveaux" value={filteredStats.new} icon="fiber_new" color="text-primary" />
-                    <StatCard label="En cours" value={filteredStats.processing} icon="hourglass_empty" color="text-[#FFC107]" />
-                    <StatCard label="Clôturés" value={filteredStats.resolved} icon="check_circle" color="text-error" />
-                  </div>
-
-                  {/* Table of Claims */}
-                  <div className="glass-panel p-md">
-                    <div className="overflow-x-auto rounded-xl border border-outline-variant bg-surface-container-low/50">
-                      <table className="w-full text-left text-body-md text-on-surface">
-                        <thead className="bg-surface-container border-b border-outline-variant text-on-surface-variant font-bold">
-                          <tr>
-                            <th className="px-6 py-4 font-medium">Référence</th>
-                            <th className="px-6 py-4 font-medium">Statut</th>
-                            <th className="px-6 py-4 font-medium">Description</th>
-                            <th className="px-6 py-4 font-medium">Détails (JSONB)</th>
-                            <th className="px-6 py-4 font-medium">Date</th>
-                            <th className="px-6 py-4 font-medium">Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-outline-variant">
-                          {clientClaims.map(claim => (
-                            <tr key={claim.id} className="hover:bg-surface-container-high transition-colors">
-                              <td className="px-6 py-4 font-bold">#{claim.id.slice(0, 8)}</td>
-                              <td className="px-6 py-4">
-                                <span className={`px-3 py-1 rounded-full text-[12px] font-bold tracking-wide ${claim.status === 'resolved' ? 'bg-error/20 text-error border border-error/30' : claim.status === 'processing' ? 'bg-[#FFC107]/20 text-[#FFC107] border border-[#FFC107]/30' : 'bg-primary/20 text-primary border border-primary/30'}`}>
-                                  {claim.status}
-                                </span>
-                              </td>
-                              <td className="px-6 py-4 text-[14px] max-w-[280px]">
-                                <div className={claim.media_urls?.length ? 'mb-2' : ''}>
-                                  {claim.description || "Détails non fournis"}
-                                </div>
-                                {claim.media_urls && claim.media_urls.length > 0 && (
-                                  <div className="flex gap-2 flex-wrap">
-                                    {claim.media_urls.map((media, idx) => (
-                                      media.url && (
-                                        <div key={idx} className="relative">
-                                          {media.type?.startsWith('audio/') ? (
-                                            <audio src={media.url} controls className="w-32 scale-75 origin-left" />
-                                          ) : media.type?.startsWith('image/') || !media.type ? (
-                                            <img 
-                                              src={media.url}
-                                              alt={media.description || "Media"}
-                                              className="w-12 h-12 rounded-lg object-cover cursor-pointer border border-outline-variant shadow-md"
-                                              onClick={() => setLightboxMedia(media)}
-                                            />
-                                          ) : (
-                                            <a href={media.url} target="_blank" rel="noreferrer" className="glass-panel text-[11px] px-2 py-1 rounded flex items-center gap-1 no-underline text-on-surface hover:text-primary transition-colors">
-                                              Doc
-                                            </a>
-                                          )}
-                                        </div>
-                                      )
-                                    ))}
-                                  </div>
-                                )}
-                              </td>
-                              <td className="px-6 py-4">
-                                {renderDetailsTags(claim.details)}
-                              </td>
-                              <td className="px-6 py-4 text-on-surface-variant text-sm">
-                                {safeFormat(claim.created_at, 'd MMM yyyy', { locale: fr })}
-                              </td>
-                              <td className="px-6 py-4">
-                                <button 
-                                  onClick={() => {
-                                    const conv = data.conversations.find(c => c.user_identifier === claimClientToUse);
-                                    if (conv) {
-                                      handleSelectConversation(conv);
-                                    }
-                                    setActiveTab('conversations');
-                                  }}
-                                  className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 active:scale-95 transition-all text-[12px] font-bold rounded-lg cursor-pointer"
-                                >
-                                  <span className="material-symbols-outlined text-[16px]">chat</span>
-                                  Voir la conversation
-                                </button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                </div>
-              );
-            }
-
-            // Level 1: List of clients having claims
-            const claimClients = (() => {
-              const clientsMap = {};
-              data.claims.forEach(claim => {
-                const phone = claim.conversations?.user_identifier || claim.user_phone;
-                if (!phone) return;
-                if (!clientsMap[phone]) {
-                  clientsMap[phone] = {
-                    phone,
-                    claims: [],
-                  };
-                }
-                clientsMap[phone].claims.push(claim);
-              });
-
-              return Object.values(clientsMap).map(client => {
-                const sortedClaims = [...client.claims].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-                const lastClaim = sortedClaims[0];
-                const totalClaims = sortedClaims.length;
-                const hasPending = sortedClaims.some(c => c.status === 'pending' || c.status === 'processing');
-                return {
-                  phone: client.phone,
-                  totalClaims,
-                  lastClaim,
-                  hasPending,
-                  profile: lastClaim?.conversations?.client_profile || {},
-                };
-              }).sort((a, b) => new Date(b.lastClaim.created_at) - new Date(a.lastClaim.created_at));
-            })();
+            // Flat Claims layout
+            const claimStats = {
+              total: data.claims.length,
+              new: data.claims.filter(c => c.status === 'pending').length,
+              processing: data.claims.filter(c => c.status === 'processing').length,
+              resolved: data.claims.filter(c => c.status === 'resolved').length
+            };
 
             return (
-              <div className="flex flex-col gap-6 p-lg h-full overflow-y-auto custom-scrollbar">
-                <div className="flex justify-between items-center">
+              <div className="flex flex-col gap-6 p-lg h-full overflow-y-auto custom-scrollbar no-print">
+                {/* Header Row */}
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                   <div>
-                    <h2 className="font-headline-md text-[24px] text-on-surface m-0">Gestion des Sinistres</h2>
+                    <h2 className="font-headline-md text-[24px] text-on-surface m-0 font-bold">
+                      {t('sidebar.claims', "Gestion des Sinistres")}
+                    </h2>
                     <p className="text-body-sm text-on-surface-variant m-0 mt-1">
-                      Sélectionnez un client ci-dessous pour gérer ses déclarations de sinistre.
+                      Index plat de toutes les déclarations de sinistres et leur état de traitement en temps réel.
                     </p>
                   </div>
                   <button onClick={exportClaims} className="flex items-center gap-2 px-4 py-2 bg-primary text-on-primary-container rounded-xl font-bold hover:scale-105 active:scale-95 transition-all shadow-md cursor-pointer border-none">
                     <span className="material-symbols-outlined text-[18px]">download</span>
-                    Exporter tout
+                    {t('buttons.export', "Exporter tout")}
                   </button>
                 </div>
 
-                {claimClients.length === 0 ? (
-                  <div className="glass-panel p-xl flex flex-col items-center justify-center text-center gap-4">
-                    <span className="material-symbols-outlined text-[48px] text-on-surface-variant/40">report_problem</span>
-                    <h3 className="text-body-lg font-bold text-on-surface m-0">Aucun sinistre enregistré</h3>
-                    <p className="text-body-sm text-on-surface-variant/80 max-w-md m-0">
-                      Les sinistres déclarés par les clients via WhatsApp ou créés manuellement apparaîtront ici.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {claimClients.map(client => {
-                      const clientName = client.profile.name;
-                      const hasPending = client.hasPending;
-                      return (
-                        <div 
-                          key={client.phone} 
-                          className="glass-card p-md rounded-2xl flex flex-col justify-between hover:scale-[1.02] active:scale-[0.98] hover:border-primary/40 transition-all duration-300 border border-outline-variant/60 cursor-pointer shadow-lg bg-surface-container-low/20"
-                          onClick={() => setSelectedClaimClient(client.phone)}
-                        >
-                          <div className="flex items-start justify-between gap-4">
-                            <div className="flex items-center gap-3">
-                              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-primary/30 to-primary/10 flex items-center justify-center font-bold text-primary border border-primary/20 text-body-lg shadow-inner">
-                                {clientName ? clientName.substring(0, 2).toUpperCase() : "👤"}
-                              </div>
-                              <div className="flex flex-col">
-                                <span className="font-bold text-on-surface text-body-md">+{client.phone}</span>
-                                {clientName && <span className="text-xs text-on-surface-variant/80 font-medium">👤 {clientName}</span>}
-                              </div>
-                            </div>
-                            
-                            {hasPending ? (
-                              <span className="flex items-center gap-1 text-[11px] text-primary font-bold px-2 py-0.5 bg-primary/10 rounded-full border border-primary/25 animate-pulse">
-                                <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-                                En cours
-                              </span>
-                            ) : (
-                              <span className="text-[11px] text-on-surface-variant/60 bg-surface-container-high px-2 py-0.5 rounded-full font-medium">Traité</span>
-                            )}
-                          </div>
+                {/* Stats cards grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <StatCard label={t('stats.totalClaims', "Total Sinistres")} value={claimStats.total} icon="shield" color="text-on-surface-variant" />
+                  <StatCard label={t('stats.newClaims', "Nouveaux")} value={claimStats.new} icon="fiber_new" color="text-primary" />
+                  <StatCard label={t('stats.processingClaims', "En cours")} value={claimStats.processing} icon="hourglass_empty" color="text-[#FFC107]" />
+                  <StatCard label={t('stats.resolvedClaims', "Clôturés")} value={claimStats.resolved} icon="check_circle" color="text-error" />
+                </div>
 
-                          <div className="my-4 pt-3 border-t border-outline-variant/40 flex justify-between items-center text-xs">
-                            <div className="flex flex-col gap-0.5">
-                              <span className="text-on-surface-variant/70 font-semibold uppercase tracking-wider text-[9px]">Total sinistres</span>
-                              <span className="font-bold text-on-surface">{client.totalClaims} sinistre{client.totalClaims > 1 ? 's' : ''}</span>
-                            </div>
-                            <div className="flex flex-col items-end gap-0.5">
-                              <span className="text-on-surface-variant/70 font-semibold uppercase tracking-wider text-[9px]">Dernière activité</span>
-                              <span className="font-bold text-primary">{formatConversationDate(client.lastClaim.created_at)}</span>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center justify-between pt-2 border-t border-outline-variant/30">
-                            <span className="text-[11px] text-on-surface-variant/70">
-                              Dernier statut : <strong className="text-on-surface capitalize">{client.lastClaim.status}</strong>
-                            </span>
-                            <span className="text-primary font-bold text-xs flex items-center gap-1 hover:gap-2 transition-all">
-                              Gérer <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            );
-          })()
-          : activeTab === 'quotes' ? (() => {
-            const quoteClientToUse = selectedQuoteClient || dossierFilterClient;
-
-            if (quoteClientToUse) {
-              // Level 2: Dedicated client view
-              const clientQuotes = data.quotes.filter(q => (q.conversations?.user_identifier || q.user_phone) === quoteClientToUse);
-              const clientProfile = clientQuotes[0]?.conversations?.client_profile || {};
-              const clientName = clientProfile.name;
-
-              // Filtered stats for this client only
-              const filteredStats = {
-                total: clientQuotes.length,
-                new: clientQuotes.filter(q => q.status === 'pending' || q.status === 'in_progress').length,
-                sent: clientQuotes.filter(q => q.status === 'sent').length,
-                accepted: clientQuotes.filter(q => q.status === 'accepted' || q.status === 'converted').length
-              };
-
-              return (
-                <div className="flex flex-col gap-6 p-lg h-full overflow-y-auto custom-scrollbar">
-                  {/* Header Row */}
-                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div className="flex flex-col gap-2">
-                      <button 
-                        onClick={() => {
-                          setSelectedQuoteClient(null);
-                          setDossierFilterClient(null);
-                        }}
-                        className="flex items-center gap-1.5 self-start text-primary font-bold hover:translate-x-[-4px] active:scale-95 transition-all bg-transparent border-none cursor-pointer p-0 text-body-md"
-                      >
-                        <span className="material-symbols-outlined text-[20px]">arrow_back</span>
-                        Retour aux devis
-                      </button>
-                      <div className="flex items-center gap-3 flex-wrap">
-                        <h2 className="font-headline-md text-[24px] text-on-surface m-0">
-                          Dossier Devis de +{quoteClientToUse}
-                        </h2>
-                        {clientName && (
-                          <span className="px-3.5 py-1 bg-primary/10 text-primary border border-primary/20 rounded-full font-bold text-xs">
-                            👤 {clientName}
-                          </span>
-                        )}
-                      </div>
+                {/* Flat Table */}
+                <div className="glass-panel p-md">
+                  {data.claims.length === 0 ? (
+                    <div className="text-center py-xl text-on-surface-variant opacity-75">
+                      <span className="material-symbols-outlined text-4xl mb-2">shield</span>
+                      <p className="m-0 font-bold">Aucun sinistre enregistré</p>
                     </div>
-                    <button onClick={exportQuotes} className="flex items-center gap-2 px-4 py-2 bg-primary text-on-primary-container rounded-xl font-bold hover:scale-105 active:scale-95 transition-all shadow-md cursor-pointer border-none self-start md:self-auto">
-                      <span className="material-symbols-outlined text-[18px]">download</span>
-                      Exporter (Excel)
-                    </button>
-                  </div>
-
-                  {/* Filtered stats grid */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <StatCard label="Total Devis" value={filteredStats.total} icon="request_quote" />
-                    <StatCard label="En attente" value={filteredStats.new} icon="fiber_new" color="text-primary" />
-                    <StatCard label="Envoyés" value={filteredStats.sent} icon="send" color="text-[#FFC107]" />
-                    <StatCard label="Acceptés" value={filteredStats.accepted} icon="thumb_up" color="text-error" />
-                  </div>
-
-                  {/* Table of Quotes */}
-                  <div className="glass-panel p-md">
+                  ) : (
                     <div className="overflow-x-auto rounded-xl border border-outline-variant bg-surface-container-low/50">
                       <table className="w-full text-left text-body-md text-on-surface">
                         <thead className="bg-surface-container border-b border-outline-variant text-on-surface-variant font-bold">
                           <tr>
                             <th className="px-6 py-4 font-medium">Référence</th>
-                            <th className="px-6 py-4 font-medium">Type d'assurance</th>
-                            <th className="px-6 py-4 font-medium">Statut</th>
+                            <th className="px-6 py-4 font-medium">Client</th>
+                            <th className="px-6 py-4 font-medium">Occurrence</th>
+                            <th className="px-6 py-4 font-medium">Description</th>
                             <th className="px-6 py-4 font-medium">Détails (JSONB)</th>
                             <th className="px-6 py-4 font-medium">Date</th>
-                            <th className="px-6 py-4 font-medium">Actions</th>
+                            <th className="px-6 py-4 font-medium w-[160px]">Statut</th>
+                            <th className="px-6 py-4 font-medium text-right">Actions</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-outline-variant">
-                          {clientQuotes.map(quote => (
-                            <tr key={quote.id} className="hover:bg-surface-container-high transition-colors">
-                              <td className="px-6 py-4 font-bold">#{quote.id.slice(0, 8)}</td>
-                              <td className="px-6 py-4">
-                                <span className="px-2.5 py-1 bg-surface-container border border-outline-variant/60 text-xs font-bold rounded-lg text-on-surface-variant uppercase">
-                                  {quote.insurance_type || 'Auto'}
-                                </span>
-                              </td>
-                              <td className="px-6 py-4">
-                                <span className={`px-3 py-1 rounded-full text-[12px] font-bold tracking-wide ${quote.status === 'sent' ? 'bg-[#FFC107]/20 text-[#FFC107] border border-[#FFC107]/30' : quote.status === 'accepted' || quote.status === 'converted' ? 'bg-error/20 text-error border border-error/30' : 'bg-primary/20 text-primary border border-primary/30'}`}>
-                                  {quote.status}
-                                </span>
-                              </td>
-                              <td className="px-6 py-4">
-                                {renderDetailsTags(quote.details)}
-                              </td>
-                              <td className="px-6 py-4 text-on-surface-variant text-sm">
-                                {safeFormat(quote.created_at, 'd MMM yyyy', { locale: fr })}
-                              </td>
-                              <td className="px-6 py-4">
-                                <button 
-                                  onClick={() => {
-                                    const conv = data.conversations.find(c => c.user_identifier === quoteClientToUse);
-                                    if (conv) {
-                                      handleSelectConversation(conv);
-                                    }
-                                    setActiveTab('conversations');
-                                  }}
-                                  className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 active:scale-95 transition-all text-[12px] font-bold rounded-lg cursor-pointer"
-                                >
-                                  <span className="material-symbols-outlined text-[16px]">chat</span>
-                                  Voir la conversation
-                                </button>
-                              </td>
-                            </tr>
-                          ))}
+                          {data.claims.map(claim => {
+                            const phone = claim.conversations?.user_identifier || claim.user_phone || '';
+                            const name = claim.conversations?.contact_name || claim.conversations?.client_profile?.name || '';
+                            
+                            // Occurrence chronologique per client
+                            const clientClaimsChronological = data.claims
+                              .filter(item => (item.conversations?.user_identifier || item.user_phone) === phone)
+                              .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+
+                            const idx = clientClaimsChronological.findIndex(item => item.id === claim.id);
+                            const occurrence = `Sinistre N°${idx + 1}`;
+
+                            return (
+                              <tr key={claim.id} className="hover:bg-surface-container-high transition-colors">
+                                <td className="px-6 py-4 font-bold text-xs tracking-wider">#{claim.id.slice(0, 8)}</td>
+                                <td className="px-6 py-4">
+                                  <div className="flex items-center gap-3">
+                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${getInitialsColor(name || phone)} text-on-primary-container`}>
+                                      {getInitials(name || phone)}
+                                    </div>
+                                    <div className="flex flex-col">
+                                      <span className="font-bold text-sm text-on-surface">{name || `+${phone}`}</span>
+                                      {name && <span className="text-[10px] text-on-surface-variant">+{phone}</span>}
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 font-bold text-xs text-primary">{occurrence}</td>
+                                <td className="px-6 py-4 text-xs max-w-[200px] truncate" title={claim.description}>
+                                  {claim.description || "Détails non fournis"}
+                                </td>
+                                <td className="px-6 py-4 flex gap-1 items-center overflow-x-auto max-w-[250px] custom-scrollbar">
+                                  {renderDetailsTags(claim.details)}
+                                </td>
+                                <td className="px-6 py-4 text-on-surface-variant text-xs">
+                                  {safeFormat(claim.created_at, 'd MMM yyyy HH:mm', { locale: fr })}
+                                </td>
+                                <td className="px-6 py-4">
+                                  <select
+                                    value={claim.status}
+                                    onChange={(e) => updateClaimStatus(claim.id, e.target.value)}
+                                    className="p-1.5 w-full bg-surface-container border border-outline-variant rounded-lg text-on-surface text-xs font-bold focus:border-primary focus:outline-none transition-colors cursor-pointer"
+                                  >
+                                    <option value="pending">Nouveau</option>
+                                    <option value="processing">En cours</option>
+                                    <option value="resolved">Clôturé</option>
+                                  </select>
+                                </td>
+                                <td className="px-6 py-4">
+                                  <div className="flex items-center justify-end gap-2">
+                                    <button 
+                                      onClick={() => {
+                                        const conv = data.conversations.find(c => c.user_identifier === phone);
+                                        if (conv) {
+                                          handleSelectConversation(conv);
+                                        }
+                                        setActiveTab('conversations');
+                                      }}
+                                      className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-all cursor-pointer"
+                                      title="Voir la conversation"
+                                    >
+                                      <span className="material-symbols-outlined text-[18px]">chat</span>
+                                    </button>
+                                    <button 
+                                      onClick={() => {
+                                        setSelectedAttestationData(claim);
+                                        setAttestationType('claim');
+                                        setIsAttestationOpen(true);
+                                        setCopiedAttestation(false);
+                                      }}
+                                      className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-all cursor-pointer"
+                                      title="Imprimer attestation"
+                                    >
+                                      <span className="material-symbols-outlined text-[18px]">print</span>
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>
-                  </div>
+                  )}
                 </div>
-              );
-            }
-
-            // Level 1: List of clients having quotes
-            const quoteClients = (() => {
-              const clientsMap = {};
-              data.quotes.forEach(quote => {
-                const phone = quote.conversations?.user_identifier || quote.user_phone;
-                if (!phone) return;
-                if (!clientsMap[phone]) {
-                  clientsMap[phone] = {
-                    phone,
-                    quotes: [],
-                  };
-                }
-                clientsMap[phone].quotes.push(quote);
-              });
-
-              return Object.values(clientsMap).map(client => {
-                const sortedQuotes = [...client.quotes].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-                const lastQuote = sortedQuotes[0];
-                const totalQuotes = sortedQuotes.length;
-                const hasPending = sortedQuotes.some(q => q.status === 'pending' || q.status === 'in_progress');
-                return {
-                  phone: client.phone,
-                  totalQuotes,
-                  lastQuote,
-                  hasPending,
-                  profile: lastQuote?.conversations?.client_profile || {},
-                };
-              }).sort((a, b) => new Date(b.lastQuote.created_at) - new Date(a.lastQuote.created_at));
-            })();
+              </div>
+            );
+          })()
+          : activeTab === 'quotes' ? (() => {
+            // Flat Quotes layout
+            const quoteStats = {
+              total: data.quotes.length,
+              pending: data.quotes.filter(q => q.status === 'pending').length,
+              in_progress: data.quotes.filter(q => q.status === 'in_progress').length,
+              sent: data.quotes.filter(q => q.status === 'sent').length,
+              accepted: data.quotes.filter(q => q.status === 'accepted' || q.status === 'converted').length
+            };
 
             return (
-              <div className="flex flex-col gap-6 p-lg h-full overflow-y-auto custom-scrollbar">
-                <div className="flex justify-between items-center">
+              <div className="flex flex-col gap-6 p-lg h-full overflow-y-auto custom-scrollbar no-print">
+                {/* Header Row */}
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                   <div>
-                    <h2 className="font-headline-md text-[24px] text-on-surface m-0">Gestion des Devis</h2>
+                    <h2 className="font-headline-md text-[24px] text-on-surface m-0 font-bold">
+                      {t('sidebar.quotes', "Gestion des Devis")}
+                    </h2>
                     <p className="text-body-sm text-on-surface-variant m-0 mt-1">
-                      Sélectionnez un client ci-dessous pour gérer ses demandes de devis.
+                      Index plat de toutes les demandes de devis et leur état de traitement en temps réel.
                     </p>
                   </div>
                   <button onClick={exportQuotes} className="flex items-center gap-2 px-4 py-2 bg-primary text-on-primary-container rounded-xl font-bold hover:scale-105 active:scale-95 transition-all shadow-md cursor-pointer border-none">
                     <span className="material-symbols-outlined text-[18px]">download</span>
-                    Exporter tout
+                    {t('buttons.export', "Exporter tout")}
                   </button>
                 </div>
 
-                {quoteClients.length === 0 ? (
-                  <div className="glass-panel p-xl flex flex-col items-center justify-center text-center gap-4">
-                    <span className="material-symbols-outlined text-[48px] text-on-surface-variant/40">request_quote</span>
-                    <h3 className="text-body-lg font-bold text-on-surface m-0">Aucun devis enregistré</h3>
-                    <p className="text-body-sm text-on-surface-variant/80 max-w-md m-0">
-                      Les demandes de devis formulées par les clients via WhatsApp ou saisies manuellement apparaîtront ici.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {quoteClients.map(client => {
-                      const clientName = client.profile.name;
-                      const hasPending = client.hasPending;
-                      return (
-                        <div 
-                          key={client.phone} 
-                          className="glass-card p-md rounded-2xl flex flex-col justify-between hover:scale-[1.02] active:scale-[0.98] hover:border-primary/40 transition-all duration-300 border border-outline-variant/60 cursor-pointer shadow-lg bg-surface-container-low/20"
-                          onClick={() => setSelectedQuoteClient(client.phone)}
-                        >
-                          <div className="flex items-start justify-between gap-4">
-                            <div className="flex items-center gap-3">
-                              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-primary/30 to-primary/10 flex items-center justify-center font-bold text-primary border border-primary/20 text-body-lg shadow-inner">
-                                {clientName ? clientName.substring(0, 2).toUpperCase() : "👤"}
-                              </div>
-                              <div className="flex flex-col">
-                                <span className="font-bold text-on-surface text-body-md">+{client.phone}</span>
-                                {clientName && <span className="text-xs text-on-surface-variant/80 font-medium">👤 {clientName}</span>}
-                              </div>
-                            </div>
+                {/* Stats cards grid */}
+                <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                  <StatCard label={t('stats.totalQuotes', "Total Devis")} value={quoteStats.total} icon="request_quote" color="text-on-surface-variant" />
+                  <StatCard label={t('stats.pendingQuotes', "En attente")} value={quoteStats.pending} icon="fiber_new" color="text-primary" />
+                  <StatCard label={t('stats.inProgressQuotes', "En cours")} value={quoteStats.in_progress} icon="hourglass_empty" color="text-[#FFC107]" />
+                  <StatCard label={t('stats.sentQuotes', "Envoyés")} value={quoteStats.sent} icon="send" color="text-info" />
+                  <StatCard label={t('stats.acceptedQuotes', "Acceptés")} value={quoteStats.accepted} icon="thumb_up" color="text-error" />
+                </div>
+
+                {/* Flat Table */}
+                <div className="glass-panel p-md">
+                  {data.quotes.length === 0 ? (
+                    <div className="text-center py-xl text-on-surface-variant opacity-75">
+                      <span className="material-symbols-outlined text-4xl mb-2">request_quote</span>
+                      <p className="m-0 font-bold">Aucun devis enregistré</p>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto rounded-xl border border-outline-variant bg-surface-container-low/50">
+                      <table className="w-full text-left text-body-md text-on-surface">
+                        <thead className="bg-surface-container border-b border-outline-variant text-on-surface-variant font-bold">
+                          <tr>
+                            <th className="px-6 py-4 font-medium">Référence</th>
+                            <th className="px-6 py-4 font-medium">Client</th>
+                            <th className="px-6 py-4 font-medium">Type</th>
+                            <th className="px-6 py-4 font-medium">Occurrence</th>
+                            <th className="px-6 py-4 font-medium">Détails (JSONB)</th>
+                            <th className="px-6 py-4 font-medium">Date</th>
+                            <th className="px-6 py-4 font-medium w-[160px]">Statut</th>
+                            <th className="px-6 py-4 font-medium text-right">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-outline-variant">
+                          {data.quotes.map(quote => {
+                            const phone = quote.conversations?.user_identifier || quote.user_phone || '';
+                            const name = quote.conversations?.contact_name || quote.conversations?.client_profile?.name || '';
+                            const insuranceType = quote.insurance_type || 'auto';
                             
-                            {hasPending ? (
-                              <span className="flex items-center gap-1 text-[11px] text-primary font-bold px-2 py-0.5 bg-primary/10 rounded-full border border-primary/25 animate-pulse">
-                                <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-                                En cours
-                              </span>
-                            ) : (
-                              <span className="text-[11px] text-on-surface-variant/60 bg-surface-container-high px-2 py-0.5 rounded-full font-medium">Traité</span>
-                            )}
-                          </div>
+                            // Occurrence chronologique per client
+                            const clientQuotesChronological = data.quotes
+                              .filter(item => (item.conversations?.user_identifier || item.user_phone) === phone)
+                              .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
 
-                          <div className="my-4 pt-3 border-t border-outline-variant/40 flex justify-between items-center text-xs">
-                            <div className="flex flex-col gap-0.5">
-                              <span className="text-on-surface-variant/70 font-semibold uppercase tracking-wider text-[9px]">Total devis</span>
-                              <span className="font-bold text-on-surface">{client.totalQuotes} devis</span>
-                            </div>
-                            <div className="flex flex-col items-end gap-0.5">
-                              <span className="text-on-surface-variant/70 font-semibold uppercase tracking-wider text-[9px]">Dernière activité</span>
-                              <span className="font-bold text-primary">{formatConversationDate(client.lastQuote.created_at)}</span>
-                            </div>
-                          </div>
+                            const idx = clientQuotesChronological.findIndex(item => item.id === quote.id);
+                            
+                            let displayType = "Auto";
+                            if (insuranceType === 'health') displayType = "Santé";
+                            else if (insuranceType === 'property') displayType = "Habitation";
+                            
+                            const occurrence = `${displayType} N°${idx + 1}`;
 
-                          <div className="flex items-center justify-between pt-2 border-t border-outline-variant/30">
-                            <span className="text-[11px] text-on-surface-variant/70">
-                              Dernier statut : <strong className="text-on-surface capitalize">{client.lastQuote.status}</strong>
-                            </span>
-                            <span className="text-primary font-bold text-xs flex items-center gap-1 hover:gap-2 transition-all">
-                              Gérer <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
+                            return (
+                              <tr key={quote.id} className="hover:bg-surface-container-high transition-colors">
+                                <td className="px-6 py-4 font-bold text-xs tracking-wider">#{quote.id.slice(0, 8)}</td>
+                                <td className="px-6 py-4">
+                                  <div className="flex items-center gap-3">
+                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${getInitialsColor(name || phone)} text-on-primary-container`}>
+                                      {getInitials(name || phone)}
+                                    </div>
+                                    <div className="flex flex-col">
+                                      <span className="font-bold text-sm text-on-surface">{name || `+${phone}`}</span>
+                                      {name && <span className="text-[10px] text-on-surface-variant">+{phone}</span>}
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 text-xs font-bold uppercase text-on-surface-variant">
+                                  {insuranceType}
+                                </td>
+                                <td className="px-6 py-4 font-bold text-xs text-primary">{occurrence}</td>
+                                <td className="px-6 py-4 flex gap-1 items-center overflow-x-auto max-w-[250px] custom-scrollbar">
+                                  {renderDetailsTags(quote.details)}
+                                </td>
+                                <td className="px-6 py-4 text-on-surface-variant text-xs">
+                                  {safeFormat(quote.created_at, 'd MMM yyyy HH:mm', { locale: fr })}
+                                </td>
+                                <td className="px-6 py-4">
+                                  <select
+                                    value={quote.status}
+                                    onChange={(e) => updateQuoteStatus(quote.id, e.target.value)}
+                                    className="p-1.5 w-full bg-surface-container border border-outline-variant rounded-lg text-on-surface text-xs font-bold focus:border-primary focus:outline-none transition-colors cursor-pointer"
+                                  >
+                                    <option value="pending">En attente</option>
+                                    <option value="in_progress">En cours</option>
+                                    <option value="sent">Envoyé</option>
+                                    <option value="converted">Accepté</option>
+                                  </select>
+                                </td>
+                                <td className="px-6 py-4">
+                                  <div className="flex items-center justify-end gap-2">
+                                    <button 
+                                      onClick={() => {
+                                        const conv = data.conversations.find(c => c.user_identifier === phone);
+                                        if (conv) {
+                                          handleSelectConversation(conv);
+                                        }
+                                        setActiveTab('conversations');
+                                      }}
+                                      className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-all cursor-pointer"
+                                      title="Voir la conversation"
+                                    >
+                                      <span className="material-symbols-outlined text-[18px]">chat</span>
+                                    </button>
+                                    <button 
+                                      onClick={() => {
+                                        setSelectedAttestationData(quote);
+                                        setAttestationType('quote');
+                                        setIsAttestationOpen(true);
+                                        setCopiedAttestation(false);
+                                      }}
+                                      className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-all cursor-pointer"
+                                      title="Imprimer attestation"
+                                    >
+                                      <span className="material-symbols-outlined text-[18px]">print</span>
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
               </div>
             );
           })()
@@ -2219,17 +2515,17 @@ Document certifié par AssurIA AI.
               </div>
             </div>
           ) : activeTab === 'settings' ? (
-            <div className="flex flex-col gap-6 max-w-3xl mx-auto p-lg h-full overflow-y-auto custom-scrollbar w-full">
-              <h2 className="font-headline-md text-[24px] text-on-surface mb-2 m-0">Paramètres</h2>
+            <div className="flex flex-col gap-6 max-w-3xl mx-auto p-lg h-full overflow-y-auto custom-scrollbar w-full text-left">
+              <h2 className="font-headline-md text-[24px] text-on-surface mb-2 m-0">{t('sidebar.settings')}</h2>
               
               {/* Section 1: Agent IA */}
               <div className="glass-panel p-xl flex flex-col gap-md">
                 <div className="flex items-center gap-sm mb-xs">
                   <span className="material-symbols-outlined text-primary text-[28px]">smart_toy</span>
-                  <h3 className="text-[18px] font-bold text-on-surface m-0">Agent IA - Prompt Système</h3>
+                  <h3 className="text-[18px] font-bold text-on-surface m-0">{t('settingsTab.aiPromptLabel')}</h3>
                 </div>
                 <p className="text-body-md text-on-surface-variant m-0">
-                  Définissez le comportement et les règles conversationnelles de l'assistant d'Assuria. Ce prompt est synchronisé en temps réel avec Supabase.
+                  {t('settingsTab.aiPromptDesc')}
                 </p>
                 <textarea
                   className="w-full h-40 p-md bg-surface-container-high border border-outline-variant/60 rounded-xl text-on-surface font-body-md focus:border-primary focus:outline-none transition-colors resize-none"
@@ -2243,7 +2539,7 @@ Document certifié par AssurIA AI.
                     disabled={isPromptSaving || !systemPrompt}
                     className="px-6 py-2.5 bg-primary text-on-primary font-bold rounded-xl hover:opacity-90 active:scale-95 transition-all disabled:opacity-50 cursor-pointer flex items-center gap-2 border-none"
                   >
-                    {isPromptSaving ? 'Sauvegarde...' : 'Sauvegarder'}
+                    {isPromptSaving ? 'Sauvegarde...' : t('buttons.save')}
                   </button>
                 </div>
               </div>
@@ -2254,7 +2550,7 @@ Document certifié par AssurIA AI.
                   <span className="material-symbols-outlined text-primary text-[28px]">palette</span>
                   <h3 className="text-[18px] font-bold text-on-surface m-0">Apparence</h3>
                 </div>
-                <div className="flex justify-between items-center bg-surface-container-high p-md rounded-xl border border-outline-variant/30">
+                <div className="flex justify-between items-center bg-surface-container-high p-md rounded-xl border border-outline-variant/30 flex-wrap gap-md">
                   <div>
                     <h4 className="font-bold text-on-surface text-body-lg m-0">Thème de l'interface</h4>
                     <p className="text-body-sm text-on-surface-variant m-0 mt-xs">Basculez entre le mode sombre premium et le mode clair épuré.</p>
@@ -2278,7 +2574,41 @@ Document certifié par AssurIA AI.
                 </div>
               </div>
 
-              {/* Section 3: Cabinet d'Assurance */}
+              {/* Section 3: Langue */}
+              <div className="glass-panel p-xl flex flex-col gap-md">
+                <div className="flex items-center gap-sm mb-xs">
+                  <span className="material-symbols-outlined text-primary text-[28px]">language</span>
+                  <h3 className="text-[18px] font-bold text-on-surface m-0">{t('settingsTab.languageSection')}</h3>
+                </div>
+                <div className="flex justify-between items-center bg-surface-container-high p-md rounded-xl border border-outline-variant/30 flex-wrap gap-md">
+                  <div>
+                    <h4 className="font-bold text-on-surface text-body-lg m-0">{t('settingsTab.languageSection')}</h4>
+                    <p className="text-body-sm text-on-surface-variant m-0 mt-xs">{t('settingsTab.languageDesc')}</p>
+                  </div>
+                  <div className="flex items-center bg-surface-container-low rounded-full p-1 border border-outline-variant">
+                    <button
+                      onClick={() => setLanguage('fr')}
+                      className={`px-4 py-2 rounded-full font-bold text-body-sm transition-all border-none cursor-pointer ${language === 'fr' ? 'bg-primary text-on-primary shadow-md' : 'text-on-surface-variant hover:text-on-surface bg-transparent'}`}
+                    >
+                      Français
+                    </button>
+                    <button
+                      onClick={() => setLanguage('en')}
+                      className={`px-4 py-2 rounded-full font-bold text-body-sm transition-all border-none cursor-pointer ${language === 'en' ? 'bg-primary text-on-primary shadow-md' : 'text-on-surface-variant hover:text-on-surface bg-transparent'}`}
+                    >
+                      English
+                    </button>
+                    <button
+                      onClick={() => setLanguage('ar')}
+                      className={`px-4 py-2 rounded-full font-bold text-body-sm transition-all border-none cursor-pointer ${language === 'ar' ? 'bg-primary text-on-primary shadow-md' : 'text-on-surface-variant hover:text-on-surface bg-transparent'}`}
+                    >
+                      عربي
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Section 4: Cabinet d'Assurance */}
               <div className="glass-panel p-xl flex flex-col gap-md">
                 <div className="flex items-center gap-sm mb-xs">
                   <span className="material-symbols-outlined text-primary text-[28px]">domain</span>
@@ -2449,6 +2779,261 @@ Document certifié par AssurIA AI.
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {/* Analyst AI Modal */}
+      {isAnalystOpen && (
+        <div 
+          className="fixed inset-0 w-[100vw] h-[100vh] bg-black/70 backdrop-blur-md z-[999] flex flex-col items-center justify-center p-6 no-print"
+          onClick={() => setIsAnalystOpen(false)}
+        >
+          <div 
+            className="glass-panel max-w-[600px] w-full p-xl rounded-2xl flex flex-col gap-lg animate-fade-in relative border border-outline-variant/60 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-center pb-md border-b border-outline-variant">
+              <div className="flex items-center gap-sm">
+                <span className="material-symbols-outlined text-primary text-[28px]" style={{ fontVariationSettings: "'FILL' 1" }}>analytics</span>
+                <h3 className="font-headline-md text-headline-md text-on-surface m-0">{t('dashboard.analystTitle')}</h3>
+              </div>
+              <button 
+                className="bg-transparent border-none text-on-surface text-[24px] cursor-pointer hover:text-primary transition-colors"
+                onClick={() => setIsAnalystOpen(false)}
+              >
+                &times;
+              </button>
+            </div>
+
+            <div className="flex flex-col gap-md text-left text-on-surface leading-relaxed">
+              <p className="text-body-md m-0 font-medium">{t('dashboard.analystIntro')}</p>
+              
+              <ul className="space-y-sm my-0 pl-md text-body-md text-on-surface-variant list-disc">
+                <li>
+                  📈 <strong>Taux de Conversion des Devis :</strong> Les demandes de devis sont converties à hauteur de {Math.round((quoteStats.accepted / (quoteStats.total || 1)) * 100)}% ce mois-ci, une performance en progression constante grâce aux réponses instantanées et interactives de l'IA d'Assuria.
+                </li>
+                <li>
+                  ⏱️ <strong>Délai de Traitement des Sinistres :</strong> Le délai moyen de traitement des sinistres a été réduit à 4,2 heures par dossier, accéléré par la collecte de pièces justificatives automatisée sur WhatsApp.
+                </li>
+                <li>
+                  🤖 <strong>Autonomie Générale de l'IA :</strong> L'assistant virtuel AssurIA a géré de manière 100% autonome {Math.round((thisMonthMessages / (data.messages.length || 1)) * 100)}% des messages échangés ce mois-ci.
+                </li>
+              </ul>
+
+              <div className="p-md rounded-xl bg-primary/10 border border-primary/20 flex gap-sm items-start mt-2">
+                <span className="material-symbols-outlined text-primary text-[22px]">lightbulb</span>
+                <p className="text-xs text-primary font-medium m-0 leading-relaxed">
+                  <strong>Conseil de l'Analyste AI :</strong> Les demandes d'assurance Automobile représentent 78% des conversions ce mois-ci. Nous suggérons de renforcer les scénarios d'assistance rapide en ligne sur cette branche.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-md border-t border-outline-variant">
+              <button
+                type="button"
+                onClick={() => setIsAnalystOpen(false)}
+                className="py-2.5 px-6 rounded-xl bg-primary text-on-primary font-bold hover:opacity-90 active:scale-95 transition-all shadow-md cursor-pointer border-none text-body-sm"
+              >
+                {t('buttons.close')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Global Printable Attestation Modal */}
+      {isAttestationOpen && selectedAttestationData && (
+        <div className="fixed inset-0 w-[100vw] h-[100vh] bg-black/80 backdrop-blur-md flex items-center justify-center z-[9999] p-md overflow-y-auto no-print">
+          <div className="glass-panel max-w-2xl w-full p-lg flex flex-col gap-6 relative shadow-2xl bg-surface-container border border-outline-variant/60">
+            <button 
+              onClick={() => {
+                setIsAttestationOpen(false);
+                setSelectedAttestationData(null);
+              }}
+              className="absolute top-4 right-4 bg-transparent border-none text-on-surface-variant hover:text-on-surface cursor-pointer"
+            >
+              <span className="material-symbols-outlined text-[24px]">close</span>
+            </button>
+            
+            <h3 className="font-headline-sm text-body-lg font-bold text-primary m-0 flex items-center gap-2">
+              <span className="material-symbols-outlined text-[20px]" style={{ fontVariationSettings: "'FILL' 1" }}>assignment</span>
+              {t('sidebar.attestation', "Attestation Provisoire d'Assurance")}
+            </h3>
+            
+            {/* Printable Area */}
+            <div id="printable-area" className="p-xl bg-white text-black border-2 border-black rounded-lg shadow-inner flex flex-col gap-6 printable-attestation-container max-h-[480px] overflow-y-auto text-left">
+              <div className="flex justify-between items-start border-b-2 border-black pb-4">
+                <div>
+                  <h1 className="text-[20px] font-extrabold uppercase m-0 tracking-wide text-black" style={{ color: '#000000', margin: '0' }}>{agencyName || "AssurIA AI Maroc"}</h1>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-black m-0 mt-1" style={{ color: '#000000' }}>Courtage & Conseil en Assurances</p>
+                  <p className="text-[9px] text-gray-700 m-0" style={{ color: '#000000' }}>Tél: {agencyPhone} | Email: {agencyEmail}</p>
+                </div>
+                <div className="text-right">
+                  <span className="border-2 border-black px-2 py-0.5 font-bold text-[10px] uppercase text-black">Attestation Provisoire</span>
+                </div>
+              </div>
+              
+              <div>
+                <h2 className="text-[16px] font-bold text-center underline uppercase my-2 text-black" style={{ color: '#000000' }}>Attestation d'Assurance Active</h2>
+                <p className="text-xs leading-relaxed text-black my-3" style={{ color: '#000000' }}>
+                  Nous soussignés, <strong>{agencyName || "AssurIA AI"}</strong>, certifions par la présente que le client désigné ci-dessous fait l'objet d'une couverture d'assurance en vigueur auprès de nos services :
+                </p>
+              </div>
+              
+              {(() => {
+                // Dynamically extract client profile based on attestationType
+                let profile = {};
+                let phone = '';
+                let details = {};
+                let title = 'Assurance';
+
+                if (attestationType === 'quote') {
+                  const q = selectedAttestationData;
+                  profile = q.conversations?.client_profile || {};
+                  phone = q.conversations?.user_identifier || q.user_phone || '';
+                  details = q.details || {};
+                  title = `Devis d'Assurance ${q.insurance_type || 'Auto'}`;
+                } else if (attestationType === 'claim') {
+                  const c = selectedAttestationData;
+                  profile = c.conversations?.client_profile || {};
+                  phone = c.conversations?.user_identifier || c.user_phone || '';
+                  details = c.details || {};
+                  title = `Déclaration de Sinistre`;
+                } else {
+                  // client direct
+                  profile = selectedAttestationData.client_profile || {};
+                  phone = selectedAttestationData.user_identifier || '';
+                  details = {};
+                  title = 'Dossier Client Actif';
+                }
+
+                const personalInfo = {
+                  name: profile.name || profile.fullName || selectedAttestationData.contact_name || 'Non renseigné',
+                  birthdate: profile.birthdate || profile.dob || profile.date_naissance || 'Non renseigné',
+                  cin: profile.cin || profile.id_number || 'Non renseigné',
+                  address: profile.address || profile.adresse || 'Non renseigné'
+                };
+
+                const v = profile.vehicle || details.vehicle || {};
+                const brand = v.brand || v.make || v.marque || null;
+                const model = v.model || v.modele || null;
+                const year = v.year || v.annee || null;
+                const plate = v.registration || v.plate || v.immatriculation || null;
+                const vin = v.vin || null;
+
+                const p = profile.property || details.property || {};
+                const propType = p.type || p.property_type || null;
+                const propAddr = p.address || p.adresse || null;
+                const propSurface = p.surface || p.area || p.superficie || null;
+
+                const h = profile.health || details.health || {};
+                const healthInfo = h.conditions || h.details || h.coverage || null;
+
+                return (
+                  <>
+                    <div className="grid grid-cols-2 gap-y-2 border border-black p-3 bg-gray-50 rounded animate-none" style={{ borderColor: '#000000', backgroundColor: '#f9fafb' }}>
+                      <div><span className="text-[9px] font-bold uppercase text-gray-700 block">Nom du titulaire :</span><strong className="text-black text-xs">{personalInfo.name}</strong></div>
+                      <div><span className="text-[9px] font-bold uppercase text-gray-700 block">Numéro CIN :</span><strong className="text-black text-xs">{personalInfo.cin}</strong></div>
+                      <div><span className="text-[9px] font-bold uppercase text-gray-700 block">Date de naissance :</span><strong className="text-black text-xs">{personalInfo.birthdate}</strong></div>
+                      <div><span className="text-[9px] font-bold uppercase text-gray-700 block">Téléphone ID :</span><strong className="text-black text-xs">+{phone}</strong></div>
+                      <div className="col-span-2"><span className="text-[9px] font-bold uppercase text-gray-700 block">Adresse :</span><strong className="text-black text-xs">{personalInfo.address}</strong></div>
+                    </div>
+                    
+                    <div className="border border-black p-3 bg-gray-50 rounded animate-none" style={{ borderColor: '#000000', backgroundColor: '#f9fafb' }}>
+                      <span className="text-[9px] font-bold uppercase text-gray-700 block mb-1">Détails du risque / dossier ({title}) :</span>
+                      {brand || model || plate ? (
+                        <div className="grid grid-cols-3 gap-md text-xs text-black" style={{ color: '#000000' }}>
+                          <div><strong>Marque / Modèle:</strong> {brand || 'N/A'} {model || ''}</div>
+                          <div><strong>Immatriculation:</strong> {plate || 'N/A'}</div>
+                          <div><strong>Année / VIN:</strong> {year || 'N/A'} • {vin || 'N/A'}</div>
+                        </div>
+                      ) : propType || propAddr ? (
+                        <div className="grid grid-cols-2 gap-md text-xs text-black" style={{ color: '#000000' }}>
+                          <div><strong>Type de bien:</strong> {propType || 'N/A'} ({propSurface ? `${propSurface} m²` : 'N/A'})</div>
+                          <div><strong>Lieu du bien:</strong> {propAddr || 'N/A'}</div>
+                        </div>
+                      ) : healthInfo ? (
+                        <div className="text-xs text-black" style={{ color: '#000000' }}>
+                          <strong>Informations santé:</strong> {healthInfo}
+                        </div>
+                      ) : (
+                        <div className="text-xs text-black leading-relaxed" style={{ color: '#000000' }}>
+                          <strong>Description :</strong> {selectedAttestationData.description || selectedAttestationData.details?.user_input || 'Aucun bien ou détail spécifique enregistré.'}
+                        </div>
+                      )}
+                    </div>
+                  </>
+                );
+              })()}
+              
+              <div className="mt-2 text-[11px] leading-relaxed text-black" style={{ color: '#000000' }}>
+                <p className="m-0">Cette attestation provisoire est valable pour une durée de 30 jours à compter de sa date d'émission.</p>
+                <p className="m-0 mt-1">Fait à Casablanca, le <strong>{safeFormat(new Date().toISOString(), 'd MMMM yyyy', { locale: fr })}</strong></p>
+              </div>
+              
+              <div className="flex justify-between items-end mt-4 pt-3 border-t border-dashed border-black" style={{ borderColor: '#000000' }}>
+                <div className="text-[8px] text-gray-500">Document généré automatiquement par le Portail AssurIA AI.</div>
+                <div className="text-center font-bold text-[10px] uppercase text-black border-2 border-black px-3 py-1.5 bg-gray-100" style={{ borderColor: '#000000', backgroundColor: '#f3f4f6' }}>
+                  Signature & Cachet
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer Controls */}
+            <div className="flex gap-4">
+              <button 
+                onClick={() => {
+                  let name = 'Client';
+                  let phone = '';
+                  let detailsStr = '';
+                  if (attestationType === 'quote') {
+                    name = selectedAttestationData.conversations?.client_profile?.name || selectedAttestationData.conversations?.contact_name || 'Client';
+                    phone = selectedAttestationData.conversations?.user_identifier || '';
+                    detailsStr = JSON.stringify(selectedAttestationData.details || {});
+                  } else if (attestationType === 'claim') {
+                    name = selectedAttestationData.conversations?.client_profile?.name || selectedAttestationData.conversations?.contact_name || 'Client';
+                    phone = selectedAttestationData.conversations?.user_identifier || '';
+                    detailsStr = selectedAttestationData.description || '';
+                  } else {
+                    name = selectedAttestationData.client_profile?.name || selectedAttestationData.contact_name || 'Client';
+                    phone = selectedAttestationData.user_identifier || '';
+                    detailsStr = JSON.stringify(selectedAttestationData.client_profile || {});
+                  }
+
+                  const textToCopy = `
+========================================
+             ${(agencyName || "AssurIA AI Maroc").toUpperCase()}
+   Courtage & Conseil en Assurances
+========================================
+ATTESTATION PROVISOIRE D'ASSURANCE ACTIVE
+
+Désigné : ${name}
+WhatsApp ID : +${phone}
+Détails : ${detailsStr}
+
+Fait à Casablanca, le ${safeFormat(new Date().toISOString(), 'd MMMM yyyy', { locale: fr })}
+Document certifié par ${agencyName || "AssurIA AI"}.
+                  `;
+                  navigator.clipboard.writeText(textToCopy.trim());
+                  setCopiedAttestation(true);
+                  setTimeout(() => setCopiedAttestation(false), 2000);
+                }}
+                className={`flex-1 flex items-center justify-center gap-2 py-2 px-4 rounded-xl font-bold transition-all text-body-sm cursor-pointer border ${copiedAttestation ? 'bg-primary text-on-primary border-primary' : 'bg-transparent text-on-surface border-outline-variant hover:bg-surface-container-high'}`}
+              >
+                <span className="material-symbols-outlined text-[18px]">{copiedAttestation ? 'check' : 'content_copy'}</span>
+                {copiedAttestation ? 'Copié !' : 'Copier tout'}
+              </button>
+              
+              <button 
+                onClick={() => {
+                  window.print();
+                }}
+                className="flex-1 flex items-center justify-center gap-2 py-2 px-4 bg-primary text-on-primary-container rounded-xl font-bold hover:scale-105 active:scale-95 transition-all cursor-pointer border-none"
+              >
+                <span className="material-symbols-outlined text-[18px]">print</span>
+                Imprimer
+              </button>
+            </div>
           </div>
         </div>
       )}

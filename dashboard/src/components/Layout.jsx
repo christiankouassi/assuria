@@ -11,7 +11,8 @@ export default function Layout({
   unreadCounts, 
   notificationsCount, 
   toggleNotifications,
-  onNewPolicy
+  onNewPolicy,
+  t
 }) {
   return (
     <div className={`min-h-[100dvh] bg-background text-on-surface font-body-md flex flex-col ${theme === 'dark' ? 'dark' : ''}`}>
@@ -20,6 +21,7 @@ export default function Layout({
         setActiveTab={setActiveTab} 
         unreadCounts={unreadCounts} 
         onNewPolicy={onNewPolicy}
+        t={t}
       />
       <TopBar 
         theme={theme} 

@@ -68,6 +68,7 @@ async function getAIResponse(userMessage, history = [], clientProfile = {}, clie
 
         if (clientContext) {
             promptWithContext += `\n\n${clientContext}`;
+            promptWithContext += `\n\nINSTRUCTION CRITIQUE : Si le client a déjà un devis ou sinistre actif (en cours/processing/sent), informe-le poliment que son dossier est déjà pris en charge et évite d'ouvrir un doublon ou d'extraire de nouvelles données, à moins qu'il n'insiste explicitement pour faire une demande distincte pour un autre bien.`;
         }
 
         const response = await client.messages.create({
