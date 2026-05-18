@@ -37,6 +37,8 @@ function App() {
   const [expandedClients, setExpandedClients] = useState({});
   const [fileFilterClient, setFileFilterClient] = useState(null);
   const [dossierFilterClient, setDossierFilterClient] = useState(null);
+  const [selectedQuoteClient, setSelectedQuoteClient] = useState(null);
+  const [selectedClaimClient, setSelectedClaimClient] = useState(null);
   const [showNewPolicyModal, setShowNewPolicyModal] = useState(false);
   const [newPolicyPhone, setNewPolicyPhone] = useState('');
   const [newPolicyType, setNewPolicyType] = useState('quote');
@@ -59,6 +61,39 @@ function App() {
       console.warn("Date formatting error:", e);
       return '';
     }
+  };
+
+  const renderDetailsTags = (details) => {
+    if (!details || typeof details !== 'object' || Object.keys(details).length === 0) {
+      return <span className="text-on-surface-variant/60 italic text-body-sm">Aucun détail</span>;
+    }
+    return (
+      <div className="flex flex-wrap gap-2 max-w-[450px]">
+        {Object.entries(details).map(([key, val]) => {
+          if (!val || typeof val === 'object') return null;
+          // Traduction des clés courantes
+          let label = key;
+          if (key === 'vehicle' || key === 'vehicule') label = 'Véhicule';
+          else if (key === 'insurance_type' || key === 'type') label = 'Type';
+          else if (key === 'accident_type') label = 'Type d\'accident';
+          else if (key === 'accident_date') label = 'Date sinistre';
+          else if (key === 'location') label = 'Lieu';
+          else if (key === 'usage') label = 'Usage';
+          else if (key === 'bonus_malus') label = 'Bonus/Malus';
+          else if (key === 'duration' || key === 'duree') label = 'Durée';
+          else if (key === 'third_party_involved') label = 'Tiers impliqué';
+          else if (key === 'description') label = 'Description';
+
+          label = label.charAt(0).toUpperCase() + label.slice(1);
+          return (
+            <div key={key} className="flex items-center gap-1.5 px-2.5 py-1 bg-surface-container-high border border-outline-variant/60 rounded-xl text-[11px] font-semibold text-on-surface-variant">
+              <span className="opacity-70">{label}:</span>
+              <span className="text-on-surface font-bold">{String(val)}</span>
+            </div>
+          );
+        })}
+      </div>
+    );
   };
 
   const formatConversationDate = (dateStr) => {
@@ -967,211 +1002,482 @@ function App() {
             </div>
 
           ) : activeTab === 'claims' ? (() => {
-            const filteredClaims = dossierFilterClient 
-              ? data.claims.filter(c => c.conversations?.user_identifier === dossierFilterClient)
-              : data.claims;
+            const claimClientToUse = selectedClaimClient || dossierFilterClient;
+
+            if (claimClientToUse) {
+              // Level 2: Dedicated client view
+              const clientClaims = data.claims.filter(c => (c.conversations?.user_identifier || c.user_phone) === claimClientToUse);
+              const clientProfile = clientClaims[0]?.conversations?.client_profile || {};
+              const clientName = clientProfile.name;
+
+              // Filtered stats for this client only
+              const filteredStats = {
+                total: clientClaims.length,
+                new: clientClaims.filter(c => c.status === 'pending').length,
+                processing: clientClaims.filter(c => c.status === 'processing').length,
+                resolved: clientClaims.filter(c => c.status === 'resolved').length
+              };
+
+              return (
+                <div className="flex flex-col gap-6 p-lg h-full overflow-y-auto custom-scrollbar">
+                  {/* Header Row */}
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div className="flex flex-col gap-2">
+                      <button 
+                        onClick={() => {
+                          setSelectedClaimClient(null);
+                          setDossierFilterClient(null);
+                        }}
+                        className="flex items-center gap-1.5 self-start text-primary font-bold hover:translate-x-[-4px] active:scale-95 transition-all bg-transparent border-none cursor-pointer p-0 text-body-md"
+                      >
+                        <span className="material-symbols-outlined text-[20px]">arrow_back</span>
+                        Retour aux sinistres
+                      </button>
+                      <div className="flex items-center gap-3 flex-wrap">
+                        <h2 className="font-headline-md text-[24px] text-on-surface m-0">
+                          Dossier Sinistres de +{claimClientToUse}
+                        </h2>
+                        {clientName && (
+                          <span className="px-3.5 py-1 bg-primary/10 text-primary border border-primary/20 rounded-full font-bold text-xs">
+                            👤 {clientName}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <button onClick={exportClaims} className="flex items-center gap-2 px-4 py-2 bg-primary text-on-primary-container rounded-xl font-bold hover:scale-105 active:scale-95 transition-all shadow-md cursor-pointer border-none self-start md:self-auto">
+                      <span className="material-symbols-outlined text-[18px]">download</span>
+                      Exporter (Excel)
+                    </button>
+                  </div>
+
+                  {/* Filtered stats grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <StatCard label="Total Sinistres" value={filteredStats.total} icon="description" />
+                    <StatCard label="Nouveaux" value={filteredStats.new} icon="fiber_new" color="text-primary" />
+                    <StatCard label="En cours" value={filteredStats.processing} icon="hourglass_empty" color="text-[#FFC107]" />
+                    <StatCard label="Clôturés" value={filteredStats.resolved} icon="check_circle" color="text-error" />
+                  </div>
+
+                  {/* Table of Claims */}
+                  <div className="glass-panel p-md">
+                    <div className="overflow-x-auto rounded-xl border border-outline-variant bg-surface-container-low/50">
+                      <table className="w-full text-left text-body-md text-on-surface">
+                        <thead className="bg-surface-container border-b border-outline-variant text-on-surface-variant font-bold">
+                          <tr>
+                            <th className="px-6 py-4 font-medium">Référence</th>
+                            <th className="px-6 py-4 font-medium">Statut</th>
+                            <th className="px-6 py-4 font-medium">Description</th>
+                            <th className="px-6 py-4 font-medium">Détails (JSONB)</th>
+                            <th className="px-6 py-4 font-medium">Date</th>
+                            <th className="px-6 py-4 font-medium">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-outline-variant">
+                          {clientClaims.map(claim => (
+                            <tr key={claim.id} className="hover:bg-surface-container-high transition-colors">
+                              <td className="px-6 py-4 font-bold">#{claim.id.slice(0, 8)}</td>
+                              <td className="px-6 py-4">
+                                <span className={`px-3 py-1 rounded-full text-[12px] font-bold tracking-wide ${claim.status === 'resolved' ? 'bg-error/20 text-error border border-error/30' : claim.status === 'processing' ? 'bg-[#FFC107]/20 text-[#FFC107] border border-[#FFC107]/30' : 'bg-primary/20 text-primary border border-primary/30'}`}>
+                                  {claim.status}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 text-[14px] max-w-[280px]">
+                                <div className={claim.media_urls?.length ? 'mb-2' : ''}>
+                                  {claim.description || "Détails non fournis"}
+                                </div>
+                                {claim.media_urls && claim.media_urls.length > 0 && (
+                                  <div className="flex gap-2 flex-wrap">
+                                    {claim.media_urls.map((media, idx) => (
+                                      media.url && (
+                                        <div key={idx} className="relative">
+                                          {media.type?.startsWith('audio/') ? (
+                                            <audio src={media.url} controls className="w-32 scale-75 origin-left" />
+                                          ) : media.type?.startsWith('image/') || !media.type ? (
+                                            <img 
+                                              src={media.url}
+                                              alt={media.description || "Media"}
+                                              className="w-12 h-12 rounded-lg object-cover cursor-pointer border border-outline-variant shadow-md"
+                                              onClick={() => setLightboxMedia(media)}
+                                            />
+                                          ) : (
+                                            <a href={media.url} target="_blank" rel="noreferrer" className="glass-panel text-[11px] px-2 py-1 rounded flex items-center gap-1 no-underline text-on-surface hover:text-primary transition-colors">
+                                              Doc
+                                            </a>
+                                          )}
+                                        </div>
+                                      )
+                                    ))}
+                                  </div>
+                                )}
+                              </td>
+                              <td className="px-6 py-4">
+                                {renderDetailsTags(claim.details)}
+                              </td>
+                              <td className="px-6 py-4 text-on-surface-variant text-sm">
+                                {safeFormat(claim.created_at, 'd MMM yyyy', { locale: fr })}
+                              </td>
+                              <td className="px-6 py-4">
+                                <button 
+                                  onClick={() => {
+                                    const conv = data.conversations.find(c => c.user_identifier === claimClientToUse);
+                                    if (conv) {
+                                      handleSelectConversation(conv);
+                                    }
+                                    setActiveTab('conversations');
+                                  }}
+                                  className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 active:scale-95 transition-all text-[12px] font-bold rounded-lg cursor-pointer"
+                                >
+                                  <span className="material-symbols-outlined text-[16px]">chat</span>
+                                  Voir la conversation
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+
+            // Level 1: List of clients having claims
+            const claimClients = (() => {
+              const clientsMap = {};
+              data.claims.forEach(claim => {
+                const phone = claim.conversations?.user_identifier || claim.user_phone;
+                if (!phone) return;
+                if (!clientsMap[phone]) {
+                  clientsMap[phone] = {
+                    phone,
+                    claims: [],
+                  };
+                }
+                clientsMap[phone].claims.push(claim);
+              });
+
+              return Object.values(clientsMap).map(client => {
+                const sortedClaims = [...client.claims].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+                const lastClaim = sortedClaims[0];
+                const totalClaims = sortedClaims.length;
+                const hasPending = sortedClaims.some(c => c.status === 'pending' || c.status === 'processing');
+                return {
+                  phone: client.phone,
+                  totalClaims,
+                  lastClaim,
+                  hasPending,
+                  profile: lastClaim?.conversations?.client_profile || {},
+                };
+              }).sort((a, b) => new Date(b.lastClaim.created_at) - new Date(a.lastClaim.created_at));
+            })();
+
             return (
               <div className="flex flex-col gap-6 p-lg h-full overflow-y-auto custom-scrollbar">
                 <div className="flex justify-between items-center">
-                  <h2 className="font-headline-md text-[24px] text-on-surface m-0">Gestion des Sinistres</h2>
-                  <button onClick={exportClaims} className="flex items-center gap-2 px-4 py-2 bg-primary text-on-primary-container rounded-xl font-bold hover:scale-105 active:scale-95 transition-all shadow-md cursor-pointer">
+                  <div>
+                    <h2 className="font-headline-md text-[24px] text-on-surface m-0">Gestion des Sinistres</h2>
+                    <p className="text-body-sm text-on-surface-variant m-0 mt-1">
+                      Sélectionnez un client ci-dessous pour gérer ses déclarations de sinistre.
+                    </p>
+                  </div>
+                  <button onClick={exportClaims} className="flex items-center gap-2 px-4 py-2 bg-primary text-on-primary-container rounded-xl font-bold hover:scale-105 active:scale-95 transition-all shadow-md cursor-pointer border-none">
                     <span className="material-symbols-outlined text-[18px]">download</span>
-                    Exporter (Excel)
+                    Exporter tout
                   </button>
                 </div>
 
-                {dossierFilterClient && (
-                  <div className="flex items-center justify-between p-md rounded-2xl bg-primary/10 border border-primary/20 text-primary">
-                    <div className="flex items-center gap-3">
-                      <span className="material-symbols-outlined">filter_list</span>
-                      <span className="font-bold text-body-sm">
-                        Filtre actif pour le client : <span className="underline">+{dossierFilterClient}</span>
-                      </span>
-                    </div>
-                    <button 
-                      onClick={() => setDossierFilterClient(null)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-on-primary font-bold rounded-xl text-body-sm shadow-md hover:scale-105 active:scale-95 transition-all cursor-pointer border-none"
-                    >
-                      <span className="material-symbols-outlined text-[16px]">close</span>
-                      Effacer le filtre
-                    </button>
+                {claimClients.length === 0 ? (
+                  <div className="glass-panel p-xl flex flex-col items-center justify-center text-center gap-4">
+                    <span className="material-symbols-outlined text-[48px] text-on-surface-variant/40">report_problem</span>
+                    <h3 className="text-body-lg font-bold text-on-surface m-0">Aucun sinistre enregistré</h3>
+                    <p className="text-body-sm text-on-surface-variant/80 max-w-md m-0">
+                      Les sinistres déclarés par les clients via WhatsApp ou créés manuellement apparaîtront ici.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {claimClients.map(client => {
+                      const clientName = client.profile.name;
+                      const hasPending = client.hasPending;
+                      return (
+                        <div 
+                          key={client.phone} 
+                          className="glass-card p-md rounded-2xl flex flex-col justify-between hover:scale-[1.02] active:scale-[0.98] hover:border-primary/40 transition-all duration-300 border border-outline-variant/60 cursor-pointer shadow-lg bg-surface-container-low/20"
+                          onClick={() => setSelectedClaimClient(client.phone)}
+                        >
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex items-center gap-3">
+                              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-primary/30 to-primary/10 flex items-center justify-center font-bold text-primary border border-primary/20 text-body-lg shadow-inner">
+                                {clientName ? clientName.substring(0, 2).toUpperCase() : "👤"}
+                              </div>
+                              <div className="flex flex-col">
+                                <span className="font-bold text-on-surface text-body-md">+{client.phone}</span>
+                                {clientName && <span className="text-xs text-on-surface-variant/80 font-medium">👤 {clientName}</span>}
+                              </div>
+                            </div>
+                            
+                            {hasPending ? (
+                              <span className="flex items-center gap-1 text-[11px] text-primary font-bold px-2 py-0.5 bg-primary/10 rounded-full border border-primary/25 animate-pulse">
+                                <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+                                En cours
+                              </span>
+                            ) : (
+                              <span className="text-[11px] text-on-surface-variant/60 bg-surface-container-high px-2 py-0.5 rounded-full font-medium">Traité</span>
+                            )}
+                          </div>
+
+                          <div className="my-4 pt-3 border-t border-outline-variant/40 flex justify-between items-center text-xs">
+                            <div className="flex flex-col gap-0.5">
+                              <span className="text-on-surface-variant/70 font-semibold uppercase tracking-wider text-[9px]">Total sinistres</span>
+                              <span className="font-bold text-on-surface">{client.totalClaims} sinistre{client.totalClaims > 1 ? 's' : ''}</span>
+                            </div>
+                            <div className="flex flex-col items-end gap-0.5">
+                              <span className="text-on-surface-variant/70 font-semibold uppercase tracking-wider text-[9px]">Dernière activité</span>
+                              <span className="font-bold text-primary">{formatConversationDate(client.lastClaim.created_at)}</span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between pt-2 border-t border-outline-variant/30">
+                            <span className="text-[11px] text-on-surface-variant/70">
+                              Dernier statut : <strong className="text-on-surface capitalize">{client.lastClaim.status}</strong>
+                            </span>
+                            <span className="text-primary font-bold text-xs flex items-center gap-1 hover:gap-2 transition-all">
+                              Gérer <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <StatCard label="Total Sinistres" value={claimStats.total} icon="description" />
-                  <StatCard label="Nouveaux" value={claimStats.new} icon="fiber_new" color="text-primary" />
-                  <StatCard label="En cours" value={claimStats.processing} icon="hourglass_empty" color="text-[#FFC107]" />
-                  <StatCard label="Clôturés" value={claimStats.resolved} icon="check_circle" color="text-error" />
-                </div>
-
-                <div className="glass-panel p-md">
-                  <div className="overflow-x-auto rounded-xl border border-outline-variant bg-surface-container-low/50">
-                    <table className="w-full text-left text-body-md text-on-surface">
-                      <thead className="bg-surface-container border-b border-outline-variant text-on-surface-variant font-bold">
-                        <tr>
-                          <th className="px-6 py-4 font-medium">Référence</th>
-                          <th className="px-6 py-4 font-medium">Client</th>
-                          <th className="px-6 py-4 font-medium">Statut</th>
-                          <th className="px-6 py-4 font-medium">Description</th>
-                          <th className="px-6 py-4 font-medium">Date</th>
-                          <th className="px-6 py-4 font-medium">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-outline-variant">
-                        {filteredClaims.map(claim => (
-                          <tr key={claim.id} className="hover:bg-surface-container-high transition-colors">
-                            <td className="px-6 py-4 font-bold">#{claim.id.slice(0, 8)}</td>
-                            <td className="px-6 py-4">+{claim.conversations?.user_identifier}</td>
-                            <td className="px-6 py-4">
-                              <span className={`px-3 py-1 rounded-full text-[12px] font-bold tracking-wide ${claim.status === 'resolved' ? 'bg-error/20 text-error border border-error/30' : claim.status === 'processing' ? 'bg-[#FFC107]/20 text-[#FFC107] border border-[#FFC107]/30' : 'bg-primary/20 text-primary border border-primary/30'}`}>
-                                {claim.status}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 text-[14px] max-w-[350px]">
-                              <div className={claim.media_urls?.length ? 'mb-2' : ''}>
-                                {claim.description || "Détails non fournis"}
-                              </div>
-                              {claim.media_urls && claim.media_urls.length > 0 && (
-                                <div className="flex gap-2 flex-wrap">
-                                  {claim.media_urls.map((media, idx) => (
-                                    media.url && (
-                                      <div key={idx} className="relative">
-                                        {media.type?.startsWith('audio/') ? (
-                                          <audio src={media.url} controls className="w-32 scale-75 origin-left" />
-                                        ) : media.type?.startsWith('image/') || !media.type ? (
-                                          <img 
-                                            src={media.url}
-                                            alt={media.description || "Media"}
-                                            className="w-12 h-12 rounded-lg object-cover cursor-pointer border border-outline-variant shadow-md"
-                                            onClick={() => setLightboxMedia(media)}
-                                          />
-                                        ) : (
-                                          <a href={media.url} target="_blank" rel="noreferrer" className="glass-panel text-[11px] px-2 py-1 rounded flex items-center gap-1 no-underline text-on-surface hover:text-primary transition-colors">
-                                            Doc
-                                          </a>
-                                        )}
-                                      </div>
-                                    )
-                                  ))}
-                                </div>
-                              )}
-                            </td>
-                            <td className="px-6 py-4 text-on-surface-variant text-sm">
-                              {safeFormat(claim.created_at, 'd MMM yyyy', { locale: fr })}
-                            </td>
-                            <td className="px-6 py-4">
-                              <button 
-                                onClick={() => {
-                                  const phone = claim.conversations?.user_identifier;
-                                  const conv = data.conversations.find(c => c.user_identifier === phone);
-                                  if (conv) {
-                                    handleSelectConversation(conv);
-                                  }
-                                  setActiveTab('conversations');
-                                }}
-                                className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 active:scale-95 transition-all text-[12px] font-bold rounded-lg cursor-pointer"
-                              >
-                                <span className="material-symbols-outlined text-[16px]">chat</span>
-                                Voir discussion
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
               </div>
             );
           })()
           : activeTab === 'quotes' ? (() => {
-            const filteredQuotes = dossierFilterClient 
-              ? data.quotes.filter(q => q.conversations?.user_identifier === dossierFilterClient)
-              : data.quotes;
+            const quoteClientToUse = selectedQuoteClient || dossierFilterClient;
+
+            if (quoteClientToUse) {
+              // Level 2: Dedicated client view
+              const clientQuotes = data.quotes.filter(q => (q.conversations?.user_identifier || q.user_phone) === quoteClientToUse);
+              const clientProfile = clientQuotes[0]?.conversations?.client_profile || {};
+              const clientName = clientProfile.name;
+
+              // Filtered stats for this client only
+              const filteredStats = {
+                total: clientQuotes.length,
+                new: clientQuotes.filter(q => q.status === 'pending' || q.status === 'in_progress').length,
+                sent: clientQuotes.filter(q => q.status === 'sent').length,
+                accepted: clientQuotes.filter(q => q.status === 'accepted' || q.status === 'converted').length
+              };
+
+              return (
+                <div className="flex flex-col gap-6 p-lg h-full overflow-y-auto custom-scrollbar">
+                  {/* Header Row */}
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div className="flex flex-col gap-2">
+                      <button 
+                        onClick={() => {
+                          setSelectedQuoteClient(null);
+                          setDossierFilterClient(null);
+                        }}
+                        className="flex items-center gap-1.5 self-start text-primary font-bold hover:translate-x-[-4px] active:scale-95 transition-all bg-transparent border-none cursor-pointer p-0 text-body-md"
+                      >
+                        <span className="material-symbols-outlined text-[20px]">arrow_back</span>
+                        Retour aux devis
+                      </button>
+                      <div className="flex items-center gap-3 flex-wrap">
+                        <h2 className="font-headline-md text-[24px] text-on-surface m-0">
+                          Dossier Devis de +{quoteClientToUse}
+                        </h2>
+                        {clientName && (
+                          <span className="px-3.5 py-1 bg-primary/10 text-primary border border-primary/20 rounded-full font-bold text-xs">
+                            👤 {clientName}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <button onClick={exportQuotes} className="flex items-center gap-2 px-4 py-2 bg-primary text-on-primary-container rounded-xl font-bold hover:scale-105 active:scale-95 transition-all shadow-md cursor-pointer border-none self-start md:self-auto">
+                      <span className="material-symbols-outlined text-[18px]">download</span>
+                      Exporter (Excel)
+                    </button>
+                  </div>
+
+                  {/* Filtered stats grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <StatCard label="Total Devis" value={filteredStats.total} icon="request_quote" />
+                    <StatCard label="En attente" value={filteredStats.new} icon="fiber_new" color="text-primary" />
+                    <StatCard label="Envoyés" value={filteredStats.sent} icon="send" color="text-[#FFC107]" />
+                    <StatCard label="Acceptés" value={filteredStats.accepted} icon="thumb_up" color="text-error" />
+                  </div>
+
+                  {/* Table of Quotes */}
+                  <div className="glass-panel p-md">
+                    <div className="overflow-x-auto rounded-xl border border-outline-variant bg-surface-container-low/50">
+                      <table className="w-full text-left text-body-md text-on-surface">
+                        <thead className="bg-surface-container border-b border-outline-variant text-on-surface-variant font-bold">
+                          <tr>
+                            <th className="px-6 py-4 font-medium">Référence</th>
+                            <th className="px-6 py-4 font-medium">Type d'assurance</th>
+                            <th className="px-6 py-4 font-medium">Statut</th>
+                            <th className="px-6 py-4 font-medium">Détails (JSONB)</th>
+                            <th className="px-6 py-4 font-medium">Date</th>
+                            <th className="px-6 py-4 font-medium">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-outline-variant">
+                          {clientQuotes.map(quote => (
+                            <tr key={quote.id} className="hover:bg-surface-container-high transition-colors">
+                              <td className="px-6 py-4 font-bold">#{quote.id.slice(0, 8)}</td>
+                              <td className="px-6 py-4">
+                                <span className="px-2.5 py-1 bg-surface-container border border-outline-variant/60 text-xs font-bold rounded-lg text-on-surface-variant uppercase">
+                                  {quote.insurance_type || 'Auto'}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4">
+                                <span className={`px-3 py-1 rounded-full text-[12px] font-bold tracking-wide ${quote.status === 'sent' ? 'bg-[#FFC107]/20 text-[#FFC107] border border-[#FFC107]/30' : quote.status === 'accepted' || quote.status === 'converted' ? 'bg-error/20 text-error border border-error/30' : 'bg-primary/20 text-primary border border-primary/30'}`}>
+                                  {quote.status}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4">
+                                {renderDetailsTags(quote.details)}
+                              </td>
+                              <td className="px-6 py-4 text-on-surface-variant text-sm">
+                                {safeFormat(quote.created_at, 'd MMM yyyy', { locale: fr })}
+                              </td>
+                              <td className="px-6 py-4">
+                                <button 
+                                  onClick={() => {
+                                    const conv = data.conversations.find(c => c.user_identifier === quoteClientToUse);
+                                    if (conv) {
+                                      handleSelectConversation(conv);
+                                    }
+                                    setActiveTab('conversations');
+                                  }}
+                                  className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 active:scale-95 transition-all text-[12px] font-bold rounded-lg cursor-pointer"
+                                >
+                                  <span className="material-symbols-outlined text-[16px]">chat</span>
+                                  Voir la conversation
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+
+            // Level 1: List of clients having quotes
+            const quoteClients = (() => {
+              const clientsMap = {};
+              data.quotes.forEach(quote => {
+                const phone = quote.conversations?.user_identifier || quote.user_phone;
+                if (!phone) return;
+                if (!clientsMap[phone]) {
+                  clientsMap[phone] = {
+                    phone,
+                    quotes: [],
+                  };
+                }
+                clientsMap[phone].quotes.push(quote);
+              });
+
+              return Object.values(clientsMap).map(client => {
+                const sortedQuotes = [...client.quotes].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+                const lastQuote = sortedQuotes[0];
+                const totalQuotes = sortedQuotes.length;
+                const hasPending = sortedQuotes.some(q => q.status === 'pending' || q.status === 'in_progress');
+                return {
+                  phone: client.phone,
+                  totalQuotes,
+                  lastQuote,
+                  hasPending,
+                  profile: lastQuote?.conversations?.client_profile || {},
+                };
+              }).sort((a, b) => new Date(b.lastQuote.created_at) - new Date(a.lastQuote.created_at));
+            })();
+
             return (
               <div className="flex flex-col gap-6 p-lg h-full overflow-y-auto custom-scrollbar">
                 <div className="flex justify-between items-center">
-                  <h2 className="font-headline-md text-[24px] text-on-surface m-0">Gestion des Devis</h2>
-                  <button onClick={exportQuotes} className="flex items-center gap-2 px-4 py-2 bg-primary text-on-primary-container rounded-xl font-bold hover:scale-105 active:scale-95 transition-all shadow-md cursor-pointer">
+                  <div>
+                    <h2 className="font-headline-md text-[24px] text-on-surface m-0">Gestion des Devis</h2>
+                    <p className="text-body-sm text-on-surface-variant m-0 mt-1">
+                      Sélectionnez un client ci-dessous pour gérer ses demandes de devis.
+                    </p>
+                  </div>
+                  <button onClick={exportQuotes} className="flex items-center gap-2 px-4 py-2 bg-primary text-on-primary-container rounded-xl font-bold hover:scale-105 active:scale-95 transition-all shadow-md cursor-pointer border-none">
                     <span className="material-symbols-outlined text-[18px]">download</span>
-                    Exporter (Excel)
+                    Exporter tout
                   </button>
                 </div>
 
-                {dossierFilterClient && (
-                  <div className="flex items-center justify-between p-md rounded-2xl bg-primary/10 border border-primary/20 text-primary">
-                    <div className="flex items-center gap-3">
-                      <span className="material-symbols-outlined">filter_list</span>
-                      <span className="font-bold text-body-sm">
-                        Filtre actif pour le client : <span className="underline">+{dossierFilterClient}</span>
-                      </span>
-                    </div>
-                    <button 
-                      onClick={() => setDossierFilterClient(null)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-on-primary font-bold rounded-xl text-body-sm shadow-md hover:scale-105 active:scale-95 transition-all cursor-pointer border-none"
-                    >
-                      <span className="material-symbols-outlined text-[16px]">close</span>
-                      Effacer le filtre
-                    </button>
+                {quoteClients.length === 0 ? (
+                  <div className="glass-panel p-xl flex flex-col items-center justify-center text-center gap-4">
+                    <span className="material-symbols-outlined text-[48px] text-on-surface-variant/40">request_quote</span>
+                    <h3 className="text-body-lg font-bold text-on-surface m-0">Aucun devis enregistré</h3>
+                    <p className="text-body-sm text-on-surface-variant/80 max-w-md m-0">
+                      Les demandes de devis formulées par les clients via WhatsApp ou saisies manuellement apparaîtront ici.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {quoteClients.map(client => {
+                      const clientName = client.profile.name;
+                      const hasPending = client.hasPending;
+                      return (
+                        <div 
+                          key={client.phone} 
+                          className="glass-card p-md rounded-2xl flex flex-col justify-between hover:scale-[1.02] active:scale-[0.98] hover:border-primary/40 transition-all duration-300 border border-outline-variant/60 cursor-pointer shadow-lg bg-surface-container-low/20"
+                          onClick={() => setSelectedQuoteClient(client.phone)}
+                        >
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex items-center gap-3">
+                              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-primary/30 to-primary/10 flex items-center justify-center font-bold text-primary border border-primary/20 text-body-lg shadow-inner">
+                                {clientName ? clientName.substring(0, 2).toUpperCase() : "👤"}
+                              </div>
+                              <div className="flex flex-col">
+                                <span className="font-bold text-on-surface text-body-md">+{client.phone}</span>
+                                {clientName && <span className="text-xs text-on-surface-variant/80 font-medium">👤 {clientName}</span>}
+                              </div>
+                            </div>
+                            
+                            {hasPending ? (
+                              <span className="flex items-center gap-1 text-[11px] text-primary font-bold px-2 py-0.5 bg-primary/10 rounded-full border border-primary/25 animate-pulse">
+                                <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+                                En cours
+                              </span>
+                            ) : (
+                              <span className="text-[11px] text-on-surface-variant/60 bg-surface-container-high px-2 py-0.5 rounded-full font-medium">Traité</span>
+                            )}
+                          </div>
+
+                          <div className="my-4 pt-3 border-t border-outline-variant/40 flex justify-between items-center text-xs">
+                            <div className="flex flex-col gap-0.5">
+                              <span className="text-on-surface-variant/70 font-semibold uppercase tracking-wider text-[9px]">Total devis</span>
+                              <span className="font-bold text-on-surface">{client.totalQuotes} devis</span>
+                            </div>
+                            <div className="flex flex-col items-end gap-0.5">
+                              <span className="text-on-surface-variant/70 font-semibold uppercase tracking-wider text-[9px]">Dernière activité</span>
+                              <span className="font-bold text-primary">{formatConversationDate(client.lastQuote.created_at)}</span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between pt-2 border-t border-outline-variant/30">
+                            <span className="text-[11px] text-on-surface-variant/70">
+                              Dernier statut : <strong className="text-on-surface capitalize">{client.lastQuote.status}</strong>
+                            </span>
+                            <span className="text-primary font-bold text-xs flex items-center gap-1 hover:gap-2 transition-all">
+                              Gérer <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <StatCard label="Total Devis" value={quoteStats.total} icon="request_quote" />
-                  <StatCard label="Nouveaux" value={quoteStats.new} icon="fiber_new" color="text-primary" />
-                  <StatCard label="Envoyés" value={quoteStats.sent} icon="send" color="text-[#FFC107]" />
-                  <StatCard label="Acceptés" value={quoteStats.accepted} icon="thumb_up" color="text-error" />
-                </div>
-                <div className="glass-panel p-md">
-                  <div className="overflow-x-auto rounded-xl border border-outline-variant bg-surface-container-low/50">
-                    <table className="w-full text-left text-body-md text-on-surface">
-                      <thead className="bg-surface-container border-b border-outline-variant text-on-surface-variant font-bold">
-                        <tr>
-                          <th className="px-6 py-4 font-medium">Référence</th>
-                          <th className="px-6 py-4 font-medium">Client</th>
-                          <th className="px-6 py-4 font-medium">Type</th>
-                          <th className="px-6 py-4 font-medium">Statut</th>
-                          <th className="px-6 py-4 font-medium">Date</th>
-                          <th className="px-6 py-4 font-medium">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-outline-variant">
-                        {filteredQuotes.map(quote => (
-                          <tr key={quote.id} className="hover:bg-surface-container-high transition-colors">
-                            <td className="px-6 py-4 font-bold">#{quote.id.slice(0, 8)}</td>
-                            <td className="px-6 py-4">+{quote.conversations?.user_identifier}</td>
-                            <td className="px-6 py-4">{quote.insurance_type?.toUpperCase()}</td>
-                            <td className="px-6 py-4">
-                              <span className={`px-3 py-1 rounded-full text-[12px] font-bold tracking-wide ${quote.status === 'sent' ? 'bg-[#FFC107]/20 text-[#FFC107] border border-[#FFC107]/30' : quote.status === 'accepted' ? 'bg-error/20 text-error border border-error/30' : 'bg-primary/20 text-primary border border-primary/30'}`}>
-                                {quote.status}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 text-on-surface-variant text-sm">
-                              {safeFormat(quote.created_at, 'd MMM yyyy', { locale: fr })}
-                            </td>
-                            <td className="px-6 py-4">
-                              <button 
-                                onClick={() => {
-                                  const phone = quote.conversations?.user_identifier;
-                                  const conv = data.conversations.find(c => c.user_identifier === phone);
-                                  if (conv) {
-                                    handleSelectConversation(conv);
-                                  }
-                                  setActiveTab('conversations');
-                                }}
-                                className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 active:scale-95 transition-all text-[12px] font-bold rounded-lg cursor-pointer"
-                              >
-                                <span className="material-symbols-outlined text-[16px]">chat</span>
-                                Voir discussion
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
               </div>
             );
           })()
