@@ -138,8 +138,26 @@ const translations = {
       aiPromptDesc: "Ce prompt définit le comportement, le ton et les règles de l'IA d'Assuria sur WhatsApp.",
       languageSection: "Langue du Tableau de Bord",
       languageDesc: "Sélectionnez votre langue de préférence pour l'interface.",
-      saveSuccess: "Paramètres sauvegardés avec succès !",
-      saveError: "Erreur lors de la sauvegarde du prompt"
+      agentSectionTitle: "Agent IA",
+      agentNameLabel: "Nom de votre assistant IA",
+      agentNameDesc: "Ce nom sera utilisé par l'IA pour se présenter aux clients sur WhatsApp",
+      agentNamePlaceholder: "Ex: AssurIA, Assistant Imtiaz, Bot Wafaassur...",
+      welcomeMsgLabel: "Message d'accueil (premier contact avec un nouveau client)",
+      welcomeMsgDesc: "Ce message est envoyé automatiquement lors du tout premier échange avec un nouveau client",
+      welcomeMsgPlaceholder: "Ex: Bonjour ! Je suis AssurIA, l'assistant de votre cabinet...",
+      commStyleLabel: "Style de communication",
+      numberedOptions: "Proposer les options en liste numérotée",
+      formal: "Vouvoiement (ton formel)",
+      informal: "Tutoiement (ton informel et chaleureux)",
+      autoLanguage: "Détecter automatiquement la langue du client",
+      onlyFr: "Répondre uniquement en français",
+      onlyAr: "Répondre uniquement en arabe",
+      customInstructionsLabel: "Instructions personnalisées pour votre agent IA",
+      customInstructionsDesc: "Ces instructions personnalisent le comportement de votre agent. Les règles techniques de gestion des dossiers sont gérées automatiquement par le système et ne peuvent pas être modifiées ici.",
+      customInstructionsPlaceholder: "Écrivez ici toutes les instructions spécifiques que vous souhaitez donner à votre agent. Par exemple : Toujours terminer chaque message par nos coordonnées. Ne jamais mentionner les tarifs. Toujours proposer un rappel téléphonique si le client hésite...",
+      saveButton: "Sauvegarder",
+      saveSuccess: "Paramètres de l'agent IA mis à jour.",
+      saveError: "Erreur lors de la mise à jour des paramètres."
     },
     helpTab: {
       title: "Centre d'Aide",
@@ -310,8 +328,26 @@ const translations = {
       aiPromptDesc: "This prompt defines Assuria's AI behavior, tone, and rules on WhatsApp.",
       languageSection: "Dashboard Language",
       languageDesc: "Select your preferred language for the interface.",
-      saveSuccess: "Settings saved successfully!",
-      saveError: "Error saving prompt"
+      agentSectionTitle: "AI Agent",
+      agentNameLabel: "Name of your AI assistant",
+      agentNameDesc: "This name will be used by the AI to introduce itself to clients on WhatsApp",
+      agentNamePlaceholder: "Ex: AssurIA, Imtiaz Assistant, Wafaassur Bot...",
+      welcomeMsgLabel: "Welcome message (first contact with a new client)",
+      welcomeMsgDesc: "This message is automatically sent during the very first exchange with a new client",
+      welcomeMsgPlaceholder: "Ex: Hello! I am AssurIA, your agency's assistant...",
+      commStyleLabel: "Communication style",
+      numberedOptions: "Propose options as a numbered list",
+      formal: "Use formal address (vouvoiement)",
+      informal: "Use warm and informal tone (tutoiement)",
+      autoLanguage: "Automatically detect client's language",
+      onlyFr: "Reply in French only",
+      onlyAr: "Reply in Arabic only",
+      customInstructionsLabel: "Custom instructions for your AI agent",
+      customInstructionsDesc: "These instructions personalize your agent's behavior. Technical file management rules are handled automatically by the system and cannot be edited here.",
+      customInstructionsPlaceholder: "Write any specific instructions you want to give your agent. For example: Always end each message with our contact info. Never mention prices. Always offer a call back if the client hesitates...",
+      saveButton: "Save Settings",
+      saveSuccess: "AI Agent settings updated successfully.",
+      saveError: "Error updating settings."
     },
     helpTab: {
       title: "Help Center",
@@ -482,8 +518,26 @@ const translations = {
       aiPromptDesc: "يحدد هذا التوجيه سلوك وأسلوب وقواعد الذكاء الاصطناعي لـ Assuria على واتساب.",
       languageSection: "لغة لوحة القيادة",
       languageDesc: "اختر لغتك المفضلة لواجهة المستخدم.",
-      saveSuccess: "تم حفظ الإعدادات بنجاح!",
-      saveError: "خطأ أثناء حفظ التوجيهات"
+      agentSectionTitle: "وكيل الذكاء الاصطناعي",
+      agentNameLabel: "اسم مساعدك الذكي",
+      agentNameDesc: "سيتم استخدام هذا الاسم بواسطة الذكاء الاصطناعي لتقديم نفسه للعملاء على الواتساب",
+      agentNamePlaceholder: "مثال: AssurIA، مساعد إمتياز، بوت وفا إيمتياز...",
+      welcomeMsgLabel: "رسالة الترحيب (أول اتصال مع عميل جديد)",
+      welcomeMsgDesc: "يتم إرسال هذه الرسالة تلقائيًا خلال أول تبادل مع عميل جديد",
+      welcomeMsgPlaceholder: "مثال: مرحبًا! أنا AssurIA، مساعد وكالتكم...",
+      commStyleLabel: "أسلوب التواصل",
+      numberedOptions: "عرض الخيارات في قائمة مرقمة",
+      formal: "صيغة الجمع والخطاب الرسمي",
+      informal: "صيغة المفرد والخطاب الودي والدافئ",
+      autoLanguage: "الكشف التلقائي عن لغة العميل",
+      onlyFr: "الرد باللغة الفرنسية فقط",
+      onlyAr: "الرد باللغة العربية فقط",
+      customInstructionsLabel: "تعليمات مخصصة لوكيل الذكاء الاصطناعي الخاص بك",
+      customInstructionsDesc: "تعمل هذه التعليمات على تخصيص سلوك وكيلك. تتم إدارة القواعد الفنية لإدارة الملفات تلقائيًا بواسطة النظام ولا يمكن تعديلها هنا.",
+      customInstructionsPlaceholder: "اكتب هنا أي تعليمات محددة تريد إعطاءها لوكيلك. على سبيل المثال: قم دائمًا بإنهاء كل رسالة ببيانات الاتصال بنا. لا تذكر الأسعار أبدًا. اعرض دائمًا معاودة الاتصال إذا تردد العميل...",
+      saveButton: "حفظ الإعدادات",
+      saveSuccess: "تم تحديث إعدادات وكيل الذكاء الاصطناعي بنجاح.",
+      saveError: "خطأ أثناء تحديث الإعدادات."
     },
     helpTab: {
       title: "مركز المساعدة",
@@ -604,6 +658,13 @@ function App() {
   const [agencyPhone, setAgencyPhone] = useState(localStorage.getItem('agencyPhone') || '+212 6 00 00 00 00');
   const [agencyEmail, setAgencyEmail] = useState(localStorage.getItem('agencyEmail') || 'contact@assuria.ma');
 
+  // Agent IA Settings States
+  const [agentNameState, setAgentNameState] = useState('AssurIA');
+  const [welcomeMessage, setWelcomeMessage] = useState('Bonjour ! Je suis AssurIA, l\'assistant intelligent de votre cabinet d\'assurance. Comment puis-je vous aider aujourd\'hui ?');
+  const [commStyle, setCommStyle] = useState('numbered_options,auto_language');
+  const [customInstructions, setCustomInstructions] = useState('');
+  const [isAgentSettingsSaving, setIsAgentSettingsSaving] = useState(false);
+
   const triggerNotification = (text) => {
     const newNotif = {
       id: Date.now(),
@@ -620,6 +681,7 @@ function App() {
   useEffect(() => {
     if (activeTab === 'settings') {
       fetchSystemPrompt();
+      fetchAgentSettings();
     }
   }, [activeTab]);
 
@@ -632,6 +694,21 @@ function App() {
       }
     } catch (e) {
       console.error('Erreur de récupération du prompt:', e);
+    }
+  };
+
+  const fetchAgentSettings = async () => {
+    try {
+      const res = await fetch('/api/settings');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.agent_name !== undefined) setAgentNameState(data.agent_name);
+        if (data.welcome_message !== undefined) setWelcomeMessage(data.welcome_message);
+        if (data.communication_style !== undefined) setCommStyle(data.communication_style);
+        if (data.custom_instructions !== undefined) setCustomInstructions(data.custom_instructions);
+      }
+    } catch (e) {
+      console.error('Erreur de récupération des paramètres de l\'agent:', e);
     }
   };
 
@@ -652,6 +729,41 @@ function App() {
       triggerNotification('Erreur réseau avec le serveur.');
     } finally {
       setIsPromptSaving(false);
+    }
+  };
+
+  const handleToggleStyle = (value) => {
+    let styles = commStyle ? commStyle.split(',') : [];
+    if (styles.includes(value)) {
+      styles = styles.filter(s => s !== value);
+    } else {
+      styles.push(value);
+    }
+    setCommStyle(styles.filter(Boolean).join(','));
+  };
+
+  const handleSaveAgentSettings = async () => {
+    setIsAgentSettingsSaving(true);
+    try {
+      const res = await fetch('/api/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          agent_name: agentNameState,
+          welcome_message: welcomeMessage,
+          communication_style: commStyle,
+          custom_instructions: customInstructions
+        })
+      });
+      if (res.ok) {
+        triggerNotification(t('settingsTab.saveSuccess', 'Paramètres de l\'agent IA mis à jour.'));
+      } else {
+        triggerNotification(t('settingsTab.saveError', 'Erreur lors de la mise à jour des paramètres.'));
+      }
+    } catch (e) {
+      triggerNotification('Erreur réseau avec le serveur.');
+    } finally {
+      setIsAgentSettingsSaving(false);
     }
   };
 
@@ -2558,27 +2670,94 @@ function App() {
               <h2 className="font-headline-md text-[24px] text-on-surface mb-2 m-0">{t('sidebar.settings')}</h2>
               
               {/* Section 1: Agent IA */}
-              <div className="glass-panel p-xl flex flex-col gap-md">
+              <div className="glass-panel p-xl flex flex-col gap-lg">
                 <div className="flex items-center gap-sm mb-xs">
                   <span className="material-symbols-outlined text-primary text-[28px]">smart_toy</span>
-                  <h3 className="text-[18px] font-bold text-on-surface m-0">{t('settingsTab.aiPromptLabel')}</h3>
+                  <h3 className="text-[18px] font-bold text-on-surface m-0">{t('settingsTab.agentSectionTitle', 'Agent IA')}</h3>
                 </div>
-                <p className="text-body-md text-on-surface-variant m-0">
-                  {t('settingsTab.aiPromptDesc')}
-                </p>
-                <textarea
-                  className="w-full h-40 p-md bg-surface-container-high border border-outline-variant/60 rounded-xl text-on-surface font-body-md focus:border-primary focus:outline-none transition-colors resize-none"
-                  value={systemPrompt}
-                  onChange={(e) => setSystemPrompt(e.target.value)}
-                  placeholder="Chargement du prompt système..."
-                />
-                <div className="flex justify-end">
+
+                {/* Champ 1: Nom de l'agent */}
+                <div className="flex flex-col gap-xs text-left">
+                  <label className="text-body-md font-bold text-on-surface">{t('settingsTab.agentNameLabel', 'Nom de votre assistant IA')}</label>
+                  <p className="text-body-sm text-on-surface-variant m-0">{t('settingsTab.agentNameDesc', 'Ce nom sera utilisé par l\'IA pour se présenter aux clients sur WhatsApp')}</p>
+                  <input
+                    type="text"
+                    className="w-full p-md bg-surface-container-high border border-outline-variant/60 rounded-xl text-on-surface font-body-md focus:border-primary focus:outline-none transition-colors mt-xs"
+                    value={agentNameState}
+                    onChange={(e) => setAgentNameState(e.target.value)}
+                    placeholder={t('settingsTab.agentNamePlaceholder', 'Ex: AssurIA, Assistant Imtiaz, Bot Wafaassur...')}
+                  />
+                </div>
+
+                {/* Champ 2: Message d'accueil */}
+                <div className="flex flex-col gap-xs text-left">
+                  <label className="text-body-md font-bold text-on-surface">{t('settingsTab.welcomeMsgLabel', 'Message d\'accueil (premier contact avec un nouveau client)')}</label>
+                  <p className="text-body-sm text-on-surface-variant m-0">{t('settingsTab.welcomeMsgDesc', 'Ce message est envoyé automatiquement lors du tout premier échange avec un nouveau client')}</p>
+                  <textarea
+                    rows={3}
+                    className="w-full p-md bg-surface-container-high border border-outline-variant/60 rounded-xl text-on-surface font-body-md focus:border-primary focus:outline-none transition-colors resize-none mt-xs"
+                    value={welcomeMessage}
+                    onChange={(e) => setWelcomeMessage(e.target.value)}
+                    placeholder={t('settingsTab.welcomeMsgPlaceholder', 'Ex: Bonjour ! Je suis AssurIA, l\'assistant de votre cabinet...')}
+                  />
+                </div>
+
+                {/* Champ 3: Style de communication */}
+                <div className="flex flex-col gap-xs text-left">
+                  <label className="text-body-md font-bold text-on-surface">{t('settingsTab.commStyleLabel', 'Style de communication')}</label>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-xs">
+                    {[
+                      { id: 'numbered_options', label: t('settingsTab.numberedOptions', 'Proposer les options en liste numérotée') },
+                      { id: 'formal', label: t('settingsTab.formal', 'Vouvoiement (ton formel)') },
+                      { id: 'informal', label: t('settingsTab.informal', 'Tutoiement (ton informel et chaleureux)') },
+                      { id: 'auto_language', label: t('settingsTab.autoLanguage', 'Détecter automatiquement la langue du client') },
+                      { id: 'only_fr', label: t('settingsTab.onlyFr', 'Répondre uniquement en français') },
+                      { id: 'only_ar', label: t('settingsTab.onlyAr', 'Répondre uniquement en arabe') }
+                    ].map(opt => {
+                      const isChecked = commStyle.split(',').includes(opt.id);
+                      return (
+                        <label 
+                          key={opt.id} 
+                          className={`flex items-center gap-md p-md rounded-xl border transition-all cursor-pointer select-none ${
+                            isChecked 
+                              ? 'bg-primary/10 border-primary text-primary font-bold shadow-sm' 
+                              : 'bg-surface-container-high border-outline-variant/40 text-on-surface-variant hover:bg-surface-container'
+                          }`}
+                        >
+                          <input 
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => handleToggleStyle(opt.id)}
+                            className="w-4 h-4 accent-primary rounded cursor-pointer"
+                          />
+                          <span className="text-body-md">{opt.label}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Champ 4: Instructions supplémentaires */}
+                <div className="flex flex-col gap-xs text-left">
+                  <label className="text-body-md font-bold text-on-surface">{t('settingsTab.customInstructionsLabel', 'Instructions personnalisées pour votre agent IA')}</label>
+                  <p className="text-body-sm text-on-surface-variant m-0">{t('settingsTab.customInstructionsDesc', 'Ces instructions personnalisent le comportement de votre agent. Les règles techniques de gestion des dossiers sont gérées automatiquement par le système et ne peuvent pas être modifiées ici.')}</p>
+                  <textarea
+                    rows={8}
+                    className="w-full p-md bg-surface-container-high border border-outline-variant/60 rounded-xl text-on-surface font-body-md focus:border-primary focus:outline-none transition-colors resize-none mt-xs"
+                    value={customInstructions}
+                    onChange={(e) => setCustomInstructions(e.target.value)}
+                    placeholder={t('settingsTab.customInstructionsPlaceholder', 'Écrivez ici toutes les instructions spécifiques que vous souhaitez donner à votre agent. Par exemple : Toujours terminer chaque message par nos coordonnées. Ne jamais mentionner les tarifs. Toujours proposer un rappel téléphonique si le client hésite...')}
+                  />
+                </div>
+
+                {/* Bouton de sauvegarde */}
+                <div className="flex justify-end mt-md">
                   <button
-                    onClick={handleSavePrompt}
-                    disabled={isPromptSaving || !systemPrompt}
-                    className="px-6 py-2.5 bg-primary text-on-primary font-bold rounded-xl hover:opacity-90 active:scale-95 transition-all disabled:opacity-50 cursor-pointer flex items-center gap-2 border-none"
+                    onClick={handleSaveAgentSettings}
+                    disabled={isAgentSettingsSaving}
+                    className="px-6 py-2.5 bg-primary text-on-primary font-bold rounded-xl hover:opacity-90 active:scale-95 transition-all disabled:opacity-50 cursor-pointer flex items-center gap-2 border-none shadow-md"
                   >
-                    {isPromptSaving ? 'Sauvegarde...' : t('buttons.save')}
+                    {isAgentSettingsSaving ? 'Sauvegarde...' : t('settingsTab.saveButton', 'Sauvegarder')}
                   </button>
                 </div>
               </div>
