@@ -25,6 +25,18 @@ const translations = {
       newPolicy: "Nouveau dossier",
       advisorPortal: "Portail Conseiller"
     },
+    stats: {
+      totalQuotes: "Total Devis",
+      pendingQuotes: "En attente",
+      inProgressQuotes: "En cours",
+      sentQuotes: "Envoyés",
+      acceptedQuotes: "Acceptés",
+      rejectedQuotes: "Refusés",
+      totalClaims: "Total Sinistres",
+      newClaims: "Nouveaux",
+      processingClaims: "En cours",
+      resolvedClaims: "Clôturés"
+    },
     buttons: {
       export: "Exporter",
       exportAll: "Exporter tout",
@@ -185,6 +197,18 @@ const translations = {
       newPolicy: "New Folder",
       advisorPortal: "Advisor Portal"
     },
+    stats: {
+      totalQuotes: "Total Quotes",
+      pendingQuotes: "Pending",
+      inProgressQuotes: "In Progress",
+      sentQuotes: "Sent",
+      acceptedQuotes: "Accepted",
+      rejectedQuotes: "Rejected",
+      totalClaims: "Total Claims",
+      newClaims: "New",
+      processingClaims: "In Progress",
+      resolvedClaims: "Resolved"
+    },
     buttons: {
       export: "Export",
       exportAll: "Export All",
@@ -344,6 +368,18 @@ const translations = {
       settings: "الإعدادات",
       newPolicy: "ملف جديد",
       advisorPortal: "بوابة المستشار"
+    },
+    stats: {
+      totalQuotes: "إجمالي طلبات التسعير",
+      pendingQuotes: "في الانتظار",
+      inProgressQuotes: "قيد المعالجة",
+      sentQuotes: "تم الإرسال",
+      acceptedQuotes: "مقبول",
+      rejectedQuotes: "مرفوض",
+      totalClaims: "إجمالي الحوادث والتعويضات",
+      newClaims: "جديد",
+      processingClaims: "قيد المعالجة",
+      resolvedClaims: "تم الحل"
     },
     buttons: {
       export: "تصدير",
@@ -2205,10 +2241,10 @@ function App() {
 
                 {/* Stats cards grid */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <StatCard label={t('stats.totalClaims', "Total Sinistres")} value={claimStats.total} icon="shield" color="text-on-surface-variant" />
-                  <StatCard label={t('stats.newClaims', "Nouveaux")} value={claimStats.new} icon="fiber_new" color="text-primary" />
-                  <StatCard label={t('stats.processingClaims', "En cours")} value={claimStats.processing} icon="hourglass_empty" color="text-[#FFC107]" />
-                  <StatCard label={t('stats.resolvedClaims', "Clôturés")} value={claimStats.resolved} icon="check_circle" color="text-error" />
+                  <StatCard label={t('stats.totalClaims')} value={claimStats.total} icon="shield" color="text-on-surface-variant" />
+                  <StatCard label={t('stats.newClaims')} value={claimStats.new} icon="fiber_new" color="text-primary" />
+                  <StatCard label={t('stats.processingClaims')} value={claimStats.processing} icon="hourglass_empty" color="text-[#FFC107]" />
+                  <StatCard label={t('stats.resolvedClaims')} value={claimStats.resolved} icon="check_circle" color="text-error" />
                 </div>
 
                 {/* Flat Table */}
@@ -2328,7 +2364,8 @@ function App() {
               pending: data.quotes.filter(q => q.status === 'pending').length,
               in_progress: data.quotes.filter(q => q.status === 'in_progress').length,
               sent: data.quotes.filter(q => q.status === 'sent').length,
-              accepted: data.quotes.filter(q => q.status === 'accepted' || q.status === 'converted').length
+              accepted: data.quotes.filter(q => q.status === 'accepted' || q.status === 'converted').length,
+              rejected: data.quotes.filter(q => q.status === 'rejected').length
             };
 
             return (
@@ -2350,12 +2387,13 @@ function App() {
                 </div>
 
                 {/* Stats cards grid */}
-                <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
-                  <StatCard label={t('stats.totalQuotes', "Total Devis")} value={quoteStats.total} icon="request_quote" color="text-on-surface-variant" />
-                  <StatCard label={t('stats.pendingQuotes', "En attente")} value={quoteStats.pending} icon="fiber_new" color="text-primary" />
-                  <StatCard label={t('stats.inProgressQuotes', "En cours")} value={quoteStats.in_progress} icon="hourglass_empty" color="text-[#FFC107]" />
-                  <StatCard label={t('stats.sentQuotes', "Envoyés")} value={quoteStats.sent} icon="send" color="text-info" />
-                  <StatCard label={t('stats.acceptedQuotes', "Acceptés")} value={quoteStats.accepted} icon="thumb_up" color="text-error" />
+                <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                  <StatCard label={t('stats.totalQuotes')} value={quoteStats.total} icon="request_quote" color="text-on-surface-variant" />
+                  <StatCard label={t('stats.pendingQuotes')} value={quoteStats.pending} icon="fiber_new" color="text-primary" />
+                  <StatCard label={t('stats.inProgressQuotes')} value={quoteStats.in_progress} icon="hourglass_empty" color="text-[#FFC107]" />
+                  <StatCard label={t('stats.sentQuotes')} value={quoteStats.sent} icon="send" color="text-info" />
+                  <StatCard label={t('stats.acceptedQuotes')} value={quoteStats.accepted} icon="thumb_up" color="text-error" />
+                  <StatCard label={t('stats.rejectedQuotes')} value={quoteStats.rejected} icon="thumb_down" color="text-on-surface-variant" />
                 </div>
 
                 {/* Flat Table */}
@@ -2433,6 +2471,7 @@ function App() {
                                     <option value="in_progress">En cours</option>
                                     <option value="sent">Envoyé</option>
                                     <option value="converted">Accepté</option>
+                                    <option value="rejected">Refusé</option>
                                   </select>
                                 </td>
                                 <td className="px-6 py-4">
