@@ -1085,7 +1085,7 @@ function App() {
               </div>
             );
           })()
-          ) : activeTab === 'quotes' ? (() => {
+          : activeTab === 'quotes' ? (() => {
             const filteredQuotes = dossierFilterClient 
               ? data.quotes.filter(q => q.conversations?.user_identifier === dossierFilterClient)
               : data.quotes;
@@ -1175,7 +1175,7 @@ function App() {
               </div>
             );
           })()
-          ) : activeTab === 'files' ? (
+          : activeTab === 'files' ? (
             <div className="flex flex-col gap-6 p-lg h-full overflow-y-auto custom-scrollbar">
               <div className="flex justify-between items-center">
                 <div>
@@ -1509,6 +1509,9 @@ function App() {
                 {lightboxMedia.description}
               </p>
             )}
+          </div>
+        </div>
+      )}
       {/* New Policy Modal */}
       {showNewPolicyModal && (
         <div 
