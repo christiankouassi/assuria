@@ -30,13 +30,15 @@ export default function Sidebar({ activeTab, setActiveTab, unreadCounts, onNewPo
   ];
 
   return (
-    <aside className="w-60 h-full fixed left-0 top-0 border-r border-outline-variant bg-surface flex flex-col py-lg px-md z-50">
-      <div className="mb-xl px-sm">
-        <h1 className="font-headline-md text-headline-md font-bold text-primary">Assuria AI</h1>
-        <p className="text-on-surface-variant font-label-md text-label-md uppercase tracking-wider">Advisor Portal</p>
+    <aside className="w-60 h-screen fixed left-0 top-0 border-r border-outline-variant bg-surface flex flex-col justify-between py-lg px-md z-50 select-none">
+      {/* Logo - fixe en haut */}
+      <div className="mb-lg px-sm flex-shrink-0">
+        <h1 className="font-headline-md text-headline-md font-bold text-primary m-0">Assuria AI</h1>
+        <p className="text-on-surface-variant font-label-md text-label-md uppercase tracking-wider m-0">Advisor Portal</p>
       </div>
       
-      <nav className="flex-grow space-y-xs">
+      {/* Navigation - scrollable si nécessaire */}
+      <nav className="flex-1 overflow-y-auto space-y-xs my-md pr-xs custom-scrollbar">
         {tabs.map(tab => (
           <NavItem
             key={tab.id}
@@ -49,15 +51,16 @@ export default function Sidebar({ activeTab, setActiveTab, unreadCounts, onNewPo
         ))}
       </nav>
 
-      <div className="mt-auto space-y-md">
+      {/* Action Buttons - toujours visible en bas */}
+      <div className="flex-shrink-0 space-y-md pt-md border-t border-outline-variant/30">
         <button 
           onClick={onNewPolicy}
-          className="w-full bg-primary text-on-primary py-md rounded-lg font-bold transition-transform scale-95 active:scale-90 flex items-center justify-center gap-sm cursor-pointer"
+          className="w-full bg-primary text-on-primary py-md rounded-lg font-bold transition-transform scale-95 active:scale-90 flex items-center justify-center gap-sm cursor-pointer border-none"
         >
           <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>add</span>
           New Policy
         </button>
-        <div className="pt-lg border-t border-outline-variant">
+        <div>
           <div 
             onClick={() => setActiveTab('settings')}
             className={`flex items-center gap-md p-md rounded-lg transition-colors cursor-pointer ${
