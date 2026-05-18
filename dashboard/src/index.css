@@ -1,28 +1,105 @@
 @import "tailwindcss";
 @config "../tailwind.config.js";
 
+:root {
+  --background: #111318;
+  --on-background: #e2e2e8;
+  --surface: #111318;
+  --on-surface: #e2e2e8;
+  --surface-container-lowest: #0c0e12;
+  --surface-container-low: #1a1c20;
+  --surface-container: #1e2024;
+  --surface-container-high: #282a2e;
+  --surface-container-highest: #333539;
+  --outline-variant: #3d4943;
+  --on-surface-variant: #bccac1;
+  --primary: #68dbae;
+  --on-primary: #003827;
+  --primary-container: #26a37a;
+  --on-primary-container: #003121;
+  --secondary: #bec6e0;
+  --on-secondary: #283044;
+  --secondary-container: #3f465c;
+  --on-secondary-container: #adb4ce;
+  --error: #ffb4ab;
+  --error-container: #93000a;
+  --on-error: #690005;
+  --on-error-container: #ffdad6;
+  --tertiary: #ffb3ad;
+  --tertiary-container: #db726b;
+  --on-tertiary: #5f1413;
+  --on-tertiary-container: #560d0e;
+  
+  --glass-card-bg: rgba(17, 19, 24, 0.7);
+  --glass-card-border: rgba(255, 255, 255, 0.08);
+  --glass-card-hover-border: rgba(104, 219, 174, 0.3);
+  --glass-card-hover-bg: rgba(17, 20, 26, 0.8);
+  
+  --glass-panel-bg: rgba(30, 32, 36, 0.4);
+  --glass-panel-border: rgba(255, 255, 255, 0.05);
+}
+
+body.light-mode {
+  --background: #f5f6fa;
+  --on-background: #1c1d22;
+  --surface: #ffffff;
+  --on-surface: #1c1d22;
+  --surface-container-lowest: #ffffff;
+  --surface-container-low: #edf1f7;
+  --surface-container: #e2e7f0;
+  --surface-container-high: #d8dee9;
+  --surface-container-highest: #ced5e2;
+  --outline-variant: #cbd5e1;
+  --on-surface-variant: #475569;
+  --primary: #00875a;
+  --on-primary: #ffffff;
+  --primary-container: #abf2d1;
+  --on-primary-container: #002e1c;
+  --secondary: #475569;
+  --on-secondary: #ffffff;
+  --secondary-container: #e2e8f0;
+  --on-secondary-container: #1e293b;
+  --error: #ba1a1a;
+  --error-container: #ffdad6;
+  --on-error: #ffffff;
+  --on-error-container: #410002;
+  --tertiary: #a43e3a;
+  --tertiary-container: #ffdad5;
+  --on-tertiary: #ffffff;
+  --on-tertiary-container: #410002;
+  
+  --glass-card-bg: rgba(255, 255, 255, 0.85);
+  --glass-card-border: rgba(0, 0, 0, 0.06);
+  --glass-card-hover-border: rgba(0, 135, 90, 0.3);
+  --glass-card-hover-bg: rgba(255, 255, 255, 0.95);
+  
+  --glass-panel-bg: rgba(255, 255, 255, 0.6);
+  --glass-panel-border: rgba(0, 0, 0, 0.04);
+}
+
 body {
   font-family: 'Inter', sans-serif;
-  background-color: #111318;
-  color: #e2e2e8;
+  background-color: var(--background);
+  color: var(--on-background);
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 @utility glass-card {
-  background: rgba(17, 19, 24, 0.7);
+  background: var(--glass-card-bg);
   backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--glass-card-border);
   transition: all 0.3s ease;
   
   &:hover {
-    border-color: rgba(104, 219, 174, 0.3);
-    background: rgba(17, 20, 26, 0.8);
+    border-color: var(--glass-card-hover-border);
+    background: var(--glass-card-hover-bg);
   }
 }
 
 @utility glass-panel {
-  background: rgba(30, 32, 36, 0.4);
+  background: var(--glass-panel-bg);
   backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--glass-panel-border);
   border-radius: 16px;
 }
 
@@ -45,6 +122,6 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #3d4943;
+  background: var(--outline-variant);
   border-radius: 10px;
 }

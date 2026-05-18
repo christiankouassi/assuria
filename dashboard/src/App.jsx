@@ -46,9 +46,79 @@ function App() {
   const [isSubmittingPolicy, setIsSubmittingPolicy] = useState(false);
   const audioRef = useRef(typeof Audio !== "undefined" ? new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3') : null);
 
+  // Paramètres States & Handlers
+  const [systemPrompt, setSystemPrompt] = useState('');
+  const [isPromptSaving, setIsPromptSaving] = useState(false);
+  const [agencyName, setAgencyName] = useState(localStorage.getItem('agencyName') || 'AssurIA Maroc');
+  const [agencyPhone, setAgencyPhone] = useState(localStorage.getItem('agencyPhone') || '+212 6 00 00 00 00');
+  const [agencyEmail, setAgencyEmail] = useState(localStorage.getItem('agencyEmail') || 'contact@assuria.ma');
+
+  const triggerNotification = (text) => {
+    const newNotif = {
+      id: Date.now(),
+      text,
+      created_at: new Date().toISOString(),
+      read: false
+    };
+    setNotifications(prev => [newNotif, ...prev]);
+    if (audioRef.current) {
+      audioRef.current.play().catch(() => {});
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'settings') {
+      fetchSystemPrompt();
+    }
+  }, [activeTab]);
+
+  const fetchSystemPrompt = async () => {
+    try {
+      const res = await fetch('/api/settings/prompt');
+      if (res.ok) {
+        const data = await res.json();
+        setSystemPrompt(data.prompt);
+      }
+    } catch (e) {
+      console.error('Erreur de récupération du prompt:', e);
+    }
+  };
+
+  const handleSavePrompt = async () => {
+    setIsPromptSaving(true);
+    try {
+      const res = await fetch('/api/settings/prompt', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: systemPrompt })
+      });
+      if (res.ok) {
+        triggerNotification('Prompt système mis à jour.');
+      } else {
+        triggerNotification('Erreur lors de la mise à jour.');
+      }
+    } catch (e) {
+      triggerNotification('Erreur réseau avec le serveur.');
+    } finally {
+      setIsPromptSaving(false);
+    }
+  };
+
+  const handleSaveAgency = () => {
+    localStorage.setItem('agencyName', agencyName);
+    localStorage.setItem('agencyPhone', agencyPhone);
+    localStorage.setItem('agencyEmail', agencyEmail);
+    triggerNotification('Informations du cabinet enregistrées.');
+  };
+
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('theme', theme);
+    if (theme === 'light') {
+      document.body.classList.add('light-mode');
+    } else {
+      document.body.classList.remove('light-mode');
+    }
   }, [theme]);
 
   const safeFormat = (dateStr, formatPattern, options = {}) => {
@@ -142,6 +212,28 @@ function App() {
       console.warn("formatConversationDate error:", e);
       return '';
     }
+  };
+
+  const getInitials = (name) => {
+    if (!name) return '??';
+    const parts = name.trim().split(/\s+/);
+    if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
+    return (parts[0][0] + parts[1][0]).toUpperCase();
+  };
+
+  const getInitialsColor = (name) => {
+    if (!name) return 'bg-surface-container-highest text-on-surface-variant';
+    const colors = [
+      'bg-primary-container text-on-primary-container border border-primary/20',
+      'bg-secondary-container text-on-secondary-container border border-secondary/20',
+      'bg-tertiary-container text-on-tertiary-container border border-tertiary/20',
+      'bg-error-container text-on-error-container border border-error/20'
+    ];
+    let sum = 0;
+    for (let i = 0; i < name.length; i++) {
+      sum += name.charCodeAt(i);
+    }
+    return colors[sum % colors.length];
   };
 
   const scrollToBottom = () => {
@@ -768,8 +860,8 @@ function App() {
                     >
                       <div className="flex gap-3">
                         <div className="relative flex-shrink-0">
-                          <div className="w-12 h-12 rounded-full bg-surface-container-highest flex items-center justify-center text-on-surface font-bold text-lg">
-                            {conv.user_identifier.substring(0, 2).toUpperCase()}
+                          <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg ${getInitialsColor(conv.contact_name || conv.user_identifier)}`}>
+                            {getInitials(conv.contact_name || conv.user_identifier)}
                           </div>
                           <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-[#25D366] rounded-full border-2 border-surface-container-lowest flex items-center justify-center">
                             <img alt="WhatsApp Icon" className="w-3 h-3" src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" />
@@ -778,7 +870,7 @@ function App() {
                         <div className="flex-1 min-w-0">
                           <div className="flex justify-between items-start mb-1">
                             <h3 className={`font-bold truncate ${selectedConversation?.id === conv.id ? 'text-on-surface' : 'text-on-surface-variant group-hover:text-on-surface'}`}>
-                              +{conv.user_identifier}
+                              {conv.contact_name || `+${conv.user_identifier}`}
                             </h3>
                             <span className="text-[10px] text-on-surface-variant font-medium">
                               {conv.last_message ? formatConversationDate(conv.last_message.created_at) : ''}
@@ -809,14 +901,14 @@ function App() {
                     {/* Chat Header */}
                     <div className="h-16 px-lg border-b border-outline-variant flex items-center justify-between glass-panel z-10">
                       <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 rounded-full bg-surface-container-highest flex items-center justify-center text-on-surface font-bold text-lg">
-                          {selectedConversation.user_identifier.substring(0, 2).toUpperCase()}
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg ${getInitialsColor(selectedConversation.contact_name || selectedConversation.user_identifier)}`}>
+                          {getInitials(selectedConversation.contact_name || selectedConversation.user_identifier)}
                         </div>
                         <div>
-                          <h2 className="font-bold text-on-surface leading-tight">+{selectedConversation.user_identifier}</h2>
-                          <p className="text-[12px] text-primary flex items-center gap-1.5">
+                          <h2 className="font-bold text-on-surface leading-tight">{selectedConversation.contact_name || `+${selectedConversation.user_identifier}`}</h2>
+                          <p className="text-[12px] text-primary flex items-center gap-1.5 m-0">
                             <span className="w-2 h-2 bg-primary rounded-full animate-pulse"></span>
-                            Client en ligne via WhatsApp
+                            {selectedConversation.contact_name ? `+${selectedConversation.user_identifier} | ` : ''}Client via WhatsApp
                           </p>
                         </div>
                       </div>
@@ -973,7 +1065,13 @@ function App() {
                           <span className="material-symbols-outlined text-[20px]">folder_shared</span>
                           Voir documents
                         </button>
-                        <button className="w-full py-2.5 px-4 rounded-xl border border-error/20 text-error text-body-sm font-bold hover:bg-error/5 transition-colors text-left flex items-center gap-3 cursor-pointer">
+                        <button 
+                          onClick={() => {
+                            setSelectedConversation(null);
+                            triggerNotification('Session fermée avec succès.');
+                          }}
+                          className="w-full py-2.5 px-4 rounded-xl border border-error/20 text-error text-body-sm font-bold hover:bg-error/5 transition-colors text-left flex items-center gap-3 cursor-pointer"
+                        >
                           <span className="material-symbols-outlined text-[20px]">block</span>
                           Fermer la session
                         </button>
@@ -1784,6 +1882,114 @@ function App() {
                   <MessageSquare size={20} />
                   Contacter le support
                 </a>
+              </div>
+            </div>
+          ) : activeTab === 'settings' ? (
+            <div className="flex flex-col gap-6 max-w-3xl mx-auto p-lg h-full overflow-y-auto custom-scrollbar w-full">
+              <h2 className="font-headline-md text-[24px] text-on-surface mb-2 m-0">Paramètres</h2>
+              
+              {/* Section 1: Agent IA */}
+              <div className="glass-panel p-xl flex flex-col gap-md">
+                <div className="flex items-center gap-sm mb-xs">
+                  <span className="material-symbols-outlined text-primary text-[28px]">smart_toy</span>
+                  <h3 className="text-[18px] font-bold text-on-surface m-0">Agent IA - Prompt Système</h3>
+                </div>
+                <p className="text-body-md text-on-surface-variant m-0">
+                  Définissez le comportement et les règles conversationnelles de l'assistant d'Assuria. Ce prompt est synchronisé en temps réel avec Supabase.
+                </p>
+                <textarea
+                  className="w-full h-40 p-md bg-surface-container-high border border-outline-variant/60 rounded-xl text-on-surface font-body-md focus:border-primary focus:outline-none transition-colors resize-none"
+                  value={systemPrompt}
+                  onChange={(e) => setSystemPrompt(e.target.value)}
+                  placeholder="Chargement du prompt système..."
+                />
+                <div className="flex justify-end">
+                  <button
+                    onClick={handleSavePrompt}
+                    disabled={isPromptSaving || !systemPrompt}
+                    className="px-6 py-2.5 bg-primary text-on-primary font-bold rounded-xl hover:opacity-90 active:scale-95 transition-all disabled:opacity-50 cursor-pointer flex items-center gap-2 border-none"
+                  >
+                    {isPromptSaving ? 'Sauvegarde...' : 'Sauvegarder'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Section 2: Apparence */}
+              <div className="glass-panel p-xl flex flex-col gap-md">
+                <div className="flex items-center gap-sm mb-xs">
+                  <span className="material-symbols-outlined text-primary text-[28px]">palette</span>
+                  <h3 className="text-[18px] font-bold text-on-surface m-0">Apparence</h3>
+                </div>
+                <div className="flex justify-between items-center bg-surface-container-high p-md rounded-xl border border-outline-variant/30">
+                  <div>
+                    <h4 className="font-bold text-on-surface text-body-lg m-0">Thème de l'interface</h4>
+                    <p className="text-body-sm text-on-surface-variant m-0 mt-xs">Basculez entre le mode sombre premium et le mode clair épuré.</p>
+                  </div>
+                  <div className="flex items-center bg-surface-container-low rounded-full p-1 border border-outline-variant">
+                    <button
+                      onClick={() => setTheme('dark')}
+                      className={`flex items-center gap-2 px-4 py-2 rounded-full font-bold text-body-sm transition-all border-none cursor-pointer ${theme === 'dark' ? 'bg-primary text-on-primary shadow-md' : 'text-on-surface-variant hover:text-on-surface bg-transparent'}`}
+                    >
+                      <Moon size={16} />
+                      Sombre
+                    </button>
+                    <button
+                      onClick={() => setTheme('light')}
+                      className={`flex items-center gap-2 px-4 py-2 rounded-full font-bold text-body-sm transition-all border-none cursor-pointer ${theme === 'light' ? 'bg-primary text-on-primary shadow-md' : 'text-on-surface-variant hover:text-on-surface bg-transparent'}`}
+                    >
+                      <Sun size={16} />
+                      Clair
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Section 3: Cabinet d'Assurance */}
+              <div className="glass-panel p-xl flex flex-col gap-md">
+                <div className="flex items-center gap-sm mb-xs">
+                  <span className="material-symbols-outlined text-primary text-[28px]">domain</span>
+                  <h3 className="text-[18px] font-bold text-on-surface m-0">Cabinet d'Assurance</h3>
+                </div>
+                <p className="text-body-md text-on-surface-variant m-0">
+                  Modifiez les informations générales de votre cabinet d'assurance (enregistrées localement).
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-md mt-xs">
+                  <div className="flex flex-col gap-xs">
+                    <label className="text-[11px] uppercase tracking-wider text-on-surface-variant font-bold">Nom du Cabinet</label>
+                    <input
+                      type="text"
+                      className="p-md bg-surface-container-high border border-outline-variant/60 rounded-xl text-on-surface font-body-md focus:border-primary focus:outline-none transition-colors"
+                      value={agencyName}
+                      onChange={(e) => setAgencyName(e.target.value)}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-xs">
+                    <label className="text-[11px] uppercase tracking-wider text-on-surface-variant font-bold">Téléphone</label>
+                    <input
+                      type="text"
+                      className="p-md bg-surface-container-high border border-outline-variant/60 rounded-xl text-on-surface font-body-md focus:border-primary focus:outline-none transition-colors"
+                      value={agencyPhone}
+                      onChange={(e) => setAgencyPhone(e.target.value)}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-xs">
+                    <label className="text-[11px] uppercase tracking-wider text-on-surface-variant font-bold">Email</label>
+                    <input
+                      type="email"
+                      className="p-md bg-surface-container-high border border-outline-variant/60 rounded-xl text-on-surface font-body-md focus:border-primary focus:outline-none transition-colors"
+                      value={agencyEmail}
+                      onChange={(e) => setAgencyEmail(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="flex justify-end mt-sm">
+                  <button
+                    onClick={handleSaveAgency}
+                    className="px-6 py-2.5 bg-primary text-on-primary font-bold rounded-xl hover:opacity-90 active:scale-95 transition-all border-none cursor-pointer"
+                  >
+                    Sauvegarder les infos
+                  </button>
+                </div>
               </div>
             </div>
           ) : null}

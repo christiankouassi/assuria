@@ -23,6 +23,7 @@ app.use(bodyParser.json());
 app.use('/webhook', whatsappRoutes);
 app.use('/api/widget', widgetRoutes);
 app.use('/api/conversations', conversationsRoutes);
+app.use('/api/settings', require('./routes/settings'));
 
 app.get('/api/media/:mediaId', async (req, res) => {
   try {

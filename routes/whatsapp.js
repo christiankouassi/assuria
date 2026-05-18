@@ -95,10 +95,12 @@ async function processMessage(body) {
     
     console.log(`[1/8] Traitement asynchrone pour ${from} (type: ${type})`);
 
+    const contactName = body.entry?.[0]?.changes?.[0]?.value?.contacts?.[0]?.profile?.name || null;
+
     // 1. Get or Create Conversation
     let { data: conv, error: convError } = await supabase
         .from('conversations')
-        .select('id, client_profile')
+        .select('id, client_profile, contact_name')
         .eq('user_identifier', from)
         .single();
 
@@ -109,18 +111,53 @@ async function processMessage(body) {
             .insert([{ 
                 user_identifier: from,
                 platform: 'whatsapp',
-                client_profile: {}
+                client_profile: {},
+                contact_name: contactName
             }])
             .select()
             .single();
         
         if (createError) throw createError;
         conv = newConv;
+    } else if (contactName && conv.contact_name !== contactName) {
+        console.log(`[2/8] Mise à jour du nom de contact WhatsApp: ${contactName}`);
+        const { data: updatedConv, error: updateError } = await supabase
+            .from('conversations')
+            .update({ contact_name: contactName })
+            .eq('id', conv.id)
+            .select()
+            .single();
+        if (!updateError && updatedConv) {
+            conv = updatedConv;
+        }
     }
 
     const isAiEnabled = conv.client_profile?.ai_mode !== false;
     if (!isAiEnabled) {
         console.log(`[WhatsApp] Mode Conseiller (Humain) actif pour ${from}. L'IA n'enverra pas de réponse automatique.`);
+    }
+
+    let clientContext = '';
+    if (isAiEnabled) {
+        const { data: activeQuotes } = await supabase
+            .from('quotes')
+            .select('id, status, details, insurance_type')
+            .eq('conversation_id', conv.id)
+            .in('status', ['pending', 'in_progress']);
+
+        const { data: activeClaims } = await supabase
+            .from('claims')
+            .select('id, status, details, description')
+            .eq('conversation_id', conv.id)
+            .in('status', ['pending', 'in_progress', 'processing']);
+
+        clientContext = `
+CONTEXTE CLIENT :
+- Nom : ${conv.contact_name || 'Inconnu'}
+- Profil connu : ${JSON.stringify(conv.client_profile || {})}
+- Devis en cours : ${JSON.stringify(activeQuotes || [])}
+- Sinistres en cours : ${JSON.stringify(activeClaims || [])}
+Ne redemande jamais une information déjà connue.`;
     }
 
     let msgBody = "";
@@ -204,7 +241,7 @@ INSTRUCTION : Affiche TOUTES ces informations extraites au client sous forme de 
                     .order('created_at', { ascending: true })
                     .limit(50);
 
-                const aiResult = await getAIResponse(imageContext, history || [], conv.client_profile);
+                const aiResult = await getAIResponse(imageContext, history || [], conv.client_profile, clientContext);
 
                 // Mise à jour du profil client si nécessaire
                 if (aiResult.extracted_profile && Object.keys(aiResult.extracted_profile).length > 0) {
@@ -265,7 +302,7 @@ INSTRUCTION : Affiche TOUTES ces informations extraites au client sous forme de 
                     .order('created_at', { ascending: true })
                     .limit(50);
 
-                const aiResult = await getAIResponse(transcription, history || [], conv.client_profile);
+                const aiResult = await getAIResponse(transcription, history || [], conv.client_profile, clientContext);
 
                 // Mise à jour du profil client si nécessaire
                 if (aiResult.extracted_profile && Object.keys(aiResult.extracted_profile).length > 0) {
@@ -372,7 +409,7 @@ INSTRUCTION : Affiche TOUTES ces informations extraites au client sous forme de 
                 .limit(50);
 
             // 4. Get AI Response and Intent
-            const aiResult = await getAIResponse(msgBody, history || [], conv.client_profile);
+            const aiResult = await getAIResponse(msgBody, history || [], conv.client_profile, clientContext);
 
             // Mise à jour du profil client si nécessaire
             if (aiResult.extracted_profile && Object.keys(aiResult.extracted_profile).length > 0) {

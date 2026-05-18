@@ -58,7 +58,14 @@ export default function Sidebar({ activeTab, setActiveTab, unreadCounts, onNewPo
           New Policy
         </button>
         <div className="pt-lg border-t border-outline-variant">
-          <div className="flex items-center gap-md p-md rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors cursor-pointer">
+          <div 
+            onClick={() => setActiveTab('settings')}
+            className={`flex items-center gap-md p-md rounded-lg transition-colors cursor-pointer ${
+              activeTab === 'settings' 
+                ? 'bg-surface-container-high text-primary font-bold' 
+                : 'text-on-surface-variant hover:bg-surface-container-high'
+            }`}
+          >
             <span className="material-symbols-outlined">settings</span>
             <span className="font-body-md">Settings</span>
           </div>

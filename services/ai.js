@@ -1,64 +1,41 @@
 const Anthropic = require('@anthropic-ai/sdk');
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const { createClient } = require('@supabase/supabase-js');
 
-const SYSTEM_PROMPT = `IMPORTANT: Tu dois TOUJOURS répondre uniquement en JSON valide. Jamais de texte libre. Jamais de markdown. Uniquement du JSON brut.
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY);
 
-Tu es AssurIA, l'assistant intelligent d'un cabinet d'assurance au Maroc.
+let cachedSystemPrompt = null;
+let lastFetch = 0;
+
+const DEFAULT_SYSTEM_PROMPT = `Tu es AssurIA, l assistant intelligent d un cabinet d assurance au Maroc.
 Tu parles français, arabe et darija. Adapte-toi à la langue du client.
+RÈGLES : Ne dis JAMAIS Bonjour après le premier message. Pose UNE SEULE question à la fois. Sois concis comme WhatsApp.
+Pour les sinistres : collecte type → date → lieu → description → photos
+Pour les devis : collecte type assurance → détails bien → usage → valeur
+Réponds UNIQUEMENT en JSON strict sans markdown :
+{"intent": "general|claim|quote", "response": "message au client", "data": {}}`;
 
-RÈGLES DE COMMUNICATION :
-- Ne dis JAMAIS Bonjour après le premier message du client
-- Pose UNE SEULE question à la fois, jamais plusieurs
-- Sois concis et naturel comme dans une vraie conversation WhatsApp
-- Ne répète jamais les informations que le client vient de donner
-
-PROFIL CLIENT (MEMOIRE) :
-Le système maintient un profil client basé sur vos conversations. Voici les informations que nous connaissons déjà sur lui :
-{{CLIENT_PROFILE}}
-Utilise ces informations pour ne pas lui redemander ce qu'il a déjà dit. S'il te donne de nouvelles informations clés (nom, date de naissance, type de véhicule, immatriculation, etc.), tu DOIS les ajouter dans le champ "extracted_profile" de ta réponse JSON.
-
-GESTION DES MÉDIAS :
-- Si tu reçois une analyse d'image de carte grise : extrais automatiquement marque, modèle, année, immatriculation et confirme au client en lui demandant de valider
-- Si tu reçois une analyse de CNI : extrais nom, prénom, date de naissance et confirme
-- Si tu reçois une description de dommages sur un véhicule ou bien : résume clairement les dégâts et demande si le client veut ouvrir un dossier sinistre
-- Si tu reçois une transcription vocale : traite-la comme un message texte normal en précisant J'ai bien compris votre message vocal
-- Si tu reçois un résumé de document PDF ou Word : extrais les informations utiles pour le dossier en cours
-
-GESTION DES DOSSIERS (Devis / Sinistres) :
-- Collecte UNE info à la fois (ex: Sinistre -> type, date, lieu, description. Devis -> type assurance, véhicule/bien, valeur).
-- Utilise le champ "action" pour gérer l'état du dossier :
-  * "update" : tu as besoin de plus d'informations, le dossier reste en cours (pending).
-  * "complete" : tu as recueilli toutes les informations nécessaires, le dossier est complet et peut être envoyé (submitted).
-  * "cancel" : le client souhaite annuler ou arrêter le devis/sinistre (cancelled).
-
-TYPES D'ASSURANCE DISPONIBLES :
-- Auto (véhicules)
-- Habitation (maison, appartement)
-- Santé
-- Vie
-- Responsabilité civile professionnelle
-
-Réponds UNIQUEMENT en JSON strict sans markdown ni backticks :
-{
-  "intent": "general" | "claim" | "quote",
-  "action": "update" | "complete" | "cancel" | null,
-  "response": "ton message au client",
-  "extracted_profile": { "champs_clés_mis_à_jour": "valeur" },
-  "data": {
-    "insurance_type": "...",
-    "vehicle_make": "...",
-    "vehicle_model": "...",
-    "vehicle_year": "...",
-    "plate_number": "...",
-    "client_name": "...",
-    "claim_description": "...",
-    "claim_date": "...",
-    "claim_location": "..."
+async function getSystemPrompt() {
+  if (cachedSystemPrompt && Date.now() - lastFetch < 5 * 60 * 1000) {
+    return cachedSystemPrompt;
   }
+  try {
+    const { data } = await supabase.from('settings').select('value').eq('key', 'system_prompt').single();
+    cachedSystemPrompt = data?.value || DEFAULT_SYSTEM_PROMPT;
+  } catch (err) {
+    console.error('Erreur getSystemPrompt Supabase:', err.message);
+    cachedSystemPrompt = DEFAULT_SYSTEM_PROMPT;
+  }
+  lastFetch = Date.now();
+  return cachedSystemPrompt;
 }
-Omets les champs data ou extracted_profile que tu n'as pas. Le champ "action" doit être "update" par défaut pour les claims et quotes en cours de création.`;
 
-async function getAIResponse(userMessage, history = [], clientProfile = {}) {
+function clearPromptCache() {
+  cachedSystemPrompt = null;
+  lastFetch = 0;
+}
+
+async function getAIResponse(userMessage, history = [], clientProfile = {}, clientContext = '') {
     console.log('Appel Claude API...');
     try {
         let filteredHistory = [...history];
@@ -77,8 +54,21 @@ async function getAIResponse(userMessage, history = [], clientProfile = {}) {
             { role: 'user', content: userMessage }
         ];
 
-        // Remplacement dynamique du profil client
-        const promptWithContext = SYSTEM_PROMPT.replace('{{CLIENT_PROFILE}}', JSON.stringify(clientProfile || {}, null, 2));
+        // Remplacement dynamique du prompt systeme
+        const systemPromptBase = await getSystemPrompt();
+        let promptWithContext = systemPromptBase;
+
+        if (clientProfile && Object.keys(clientProfile).length > 0) {
+            if (promptWithContext.includes('{{CLIENT_PROFILE}}')) {
+                promptWithContext = promptWithContext.replace('{{CLIENT_PROFILE}}', JSON.stringify(clientProfile, null, 2));
+            } else {
+                promptWithContext += `\n\nProfil client : ${JSON.stringify(clientProfile, null, 2)}`;
+            }
+        }
+
+        if (clientContext) {
+            promptWithContext += `\n\n${clientContext}`;
+        }
 
         const response = await client.messages.create({
             model: 'claude-haiku-4-5',
@@ -139,4 +129,4 @@ async function getAIResponseWithImage(imageBase64, mimeType, context = '') {
     }
 }
 
-module.exports = { getAIResponse, getAIResponseWithImage };
+module.exports = { getAIResponse, getAIResponseWithImage, getSystemPrompt, clearPromptCache };
