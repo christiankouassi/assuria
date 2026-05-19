@@ -677,6 +677,147 @@ function App() {
   const [agencyPhone, setAgencyPhone] = useState(localStorage.getItem('agencyPhone') || '+212 6 00 00 00 00');
   const [agencyEmail, setAgencyEmail] = useState(localStorage.getItem('agencyEmail') || 'contact@assuria.ma');
 
+  // Tenant / Branding Settings States
+  const [tenantInfo, setTenantInfo] = useState({
+    id: 'f70a0bcb-2487-42f1-bd63-cda1acd9ce91',
+    name: 'Assuria',
+    subdomain: 'assuria',
+    display_name: localStorage.getItem('tenant_display_name') || 'Assuria AI',
+    primary_color: localStorage.getItem('tenant_primary_color') || '#68dbae',
+    secondary_color: localStorage.getItem('tenant_secondary_color') || '#bec6e0',
+    logo_url: localStorage.getItem('tenant_logo_url') || ''
+  });
+
+  const [tenantDisplayName, setTenantDisplayName] = useState(localStorage.getItem('tenant_display_name') || 'Assuria AI');
+  const [tenantPrimaryColor, setTenantPrimaryColor] = useState(localStorage.getItem('tenant_primary_color') || '#68dbae');
+  const [tenantSecondaryColor, setTenantSecondaryColor] = useState(localStorage.getItem('tenant_secondary_color') || '#bec6e0');
+  const [tenantLogoUrl, setTenantLogoUrl] = useState(localStorage.getItem('tenant_logo_url') || '');
+  const [isTenantSaving, setIsTenantSaving] = useState(false);
+
+  const applyThemeColors = (primary, secondary, displayName) => {
+    if (primary) {
+      document.documentElement.style.setProperty('--primary', primary);
+      document.documentElement.style.setProperty('--glass-card-hover-border', `${primary}4d`);
+    }
+    if (secondary) {
+      document.documentElement.style.setProperty('--secondary', secondary);
+    }
+    if (displayName) {
+      document.title = `${displayName} | Advisor Portal`;
+    }
+  };
+
+  // Run on startup to apply cached branding immediately
+  useEffect(() => {
+    const cachedPrimary = localStorage.getItem('tenant_primary_color') || '#68dbae';
+    const cachedSecondary = localStorage.getItem('tenant_secondary_color') || '#bec6e0';
+    const cachedDisplayName = localStorage.getItem('tenant_display_name') || 'Assuria AI';
+    applyThemeColors(cachedPrimary, cachedSecondary, cachedDisplayName);
+  }, []);
+
+  const loadTenantInfo = async (activeSession) => {
+    try {
+      if (!activeSession) return;
+      const tenantId = activeSession.user?.user_metadata?.tenant_id || 'f70a0bcb-2487-42f1-bd63-cda1acd9ce91';
+      
+      const { data: tenant, error } = await supabase
+        .from('tenants')
+        .select('*')
+        .eq('id', tenantId)
+        .maybeSingle();
+
+      if (error) {
+        console.error('Erreur chargement tenant info:', error.message);
+        return;
+      }
+
+      if (tenant) {
+        const updatedInfo = {
+          id: tenant.id,
+          name: tenant.name,
+          subdomain: tenant.subdomain,
+          display_name: tenant.display_name || 'Assuria AI',
+          primary_color: tenant.primary_color || '#68dbae',
+          secondary_color: tenant.secondary_color || '#bec6e0',
+          logo_url: tenant.logo_url || ''
+        };
+        setTenantInfo(updatedInfo);
+        
+        // Cache to localStorage
+        localStorage.setItem('tenantId', tenant.id);
+        localStorage.setItem('tenant_display_name', updatedInfo.display_name);
+        localStorage.setItem('tenant_primary_color', updatedInfo.primary_color);
+        localStorage.setItem('tenant_secondary_color', updatedInfo.secondary_color);
+        localStorage.setItem('tenant_logo_url', updatedInfo.logo_url);
+        
+        // Update input states
+        setTenantDisplayName(updatedInfo.display_name);
+        setTenantPrimaryColor(updatedInfo.primary_color);
+        setTenantSecondaryColor(updatedInfo.secondary_color);
+        setTenantLogoUrl(updatedInfo.logo_url);
+
+        // Apply theme immediately
+        applyThemeColors(updatedInfo.primary_color, updatedInfo.secondary_color, updatedInfo.display_name);
+      }
+    } catch (e) {
+      console.error('Erreur inattendue chargement tenant:', e);
+    }
+  };
+
+  const fetchWithTenant = async (url, options = {}) => {
+    const tenantId = session?.user?.user_metadata?.tenant_id || localStorage.getItem('tenantId') || 'f70a0bcb-2487-42f1-bd63-cda1acd9ce91';
+    const headers = {
+      ...options.headers,
+      'x-tenant-id': tenantId
+    };
+    return fetch(url, { ...options, headers });
+  };
+
+  const handleSaveTenantIdentity = async () => {
+    setIsTenantSaving(true);
+    try {
+      const tenantId = session?.user?.user_metadata?.tenant_id || 'f70a0bcb-2487-42f1-bd63-cda1acd9ce91';
+      
+      const { error } = await supabase
+        .from('tenants')
+        .update({
+          display_name: tenantDisplayName,
+          primary_color: tenantPrimaryColor,
+          secondary_color: tenantSecondaryColor,
+          logo_url: tenantLogoUrl
+        })
+        .eq('id', tenantId);
+
+      if (error) throw error;
+
+      // Update state immediately
+      const updatedInfo = {
+        ...tenantInfo,
+        display_name: tenantDisplayName,
+        primary_color: tenantPrimaryColor,
+        secondary_color: tenantSecondaryColor,
+        logo_url: tenantLogoUrl
+      };
+      setTenantInfo(updatedInfo);
+
+      // Save to local storage
+      localStorage.setItem('tenant_display_name', tenantDisplayName);
+      localStorage.setItem('tenant_primary_color', tenantPrimaryColor);
+      localStorage.setItem('tenant_secondary_color', tenantSecondaryColor);
+      localStorage.setItem('tenant_logo_url', tenantLogoUrl);
+
+      // Apply changes immediately
+      applyThemeColors(tenantPrimaryColor, tenantSecondaryColor, tenantDisplayName);
+
+      triggerNotification('Identité du cabinet mise à jour avec succès !');
+    } catch (err) {
+      console.error('Erreur de mise à jour de l\'identité du cabinet:', err.message);
+      triggerNotification('Erreur lors de la mise à jour de l\'identité.');
+    } finally {
+      setIsTenantSaving(false);
+    }
+  };
+
   // Agent IA Settings States
   const [agentNameState, setAgentNameState] = useState('AssurIA');
   const [welcomeMessage, setWelcomeMessage] = useState('Bonjour ! Je suis AssurIA, l\'assistant intelligent de votre cabinet d\'assurance. Comment puis-je vous aider aujourd\'hui ?');
@@ -702,11 +843,23 @@ function App() {
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session: activeSession } }) => {
       setSession(activeSession);
+      if (activeSession) {
+        loadTenantInfo(activeSession);
+      }
       setAuthLoading(false);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, activeSession) => {
       setSession(activeSession);
+      if (activeSession) {
+        loadTenantInfo(activeSession);
+      } else {
+        localStorage.removeItem('tenantId');
+        localStorage.removeItem('tenant_display_name');
+        localStorage.removeItem('tenant_primary_color');
+        localStorage.removeItem('tenant_secondary_color');
+        localStorage.removeItem('tenant_logo_url');
+      }
       setAuthLoading(false);
     });
 
@@ -791,7 +944,7 @@ function App() {
 
   const fetchSystemPrompt = async () => {
     try {
-      const res = await fetch('/api/settings/prompt');
+      const res = await fetchWithTenant('/api/settings/prompt');
       if (res.ok) {
         const data = await res.json();
         setSystemPrompt(data.prompt);
@@ -803,7 +956,7 @@ function App() {
 
   const fetchAgentSettings = async () => {
     try {
-      const res = await fetch('/api/settings');
+      const res = await fetchWithTenant('/api/settings');
       if (res.ok) {
         const data = await res.json();
         if (data.agent_name !== undefined) setAgentNameState(data.agent_name);
@@ -822,7 +975,7 @@ function App() {
   const handleSavePrompt = async () => {
     setIsPromptSaving(true);
     try {
-      const res = await fetch('/api/settings/prompt', {
+      const res = await fetchWithTenant('/api/settings/prompt', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt: systemPrompt })
@@ -852,7 +1005,7 @@ function App() {
   const handleSaveAgentSettings = async () => {
     setIsAgentSettingsSaving(true);
     try {
-      const res = await fetch('/api/settings', {
+      const res = await fetchWithTenant('/api/settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -891,7 +1044,7 @@ function App() {
     triggerNotification('Statut du devis mis à jour.');
 
     try {
-      const res = await fetch(`/api/conversations/quotes/${quoteId}/status`, {
+      const res = await fetchWithTenant(`/api/conversations/quotes/${quoteId}/status`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus })
@@ -914,7 +1067,7 @@ function App() {
     triggerNotification('Statut du sinistre mis à jour.');
 
     try {
-      const res = await fetch(`/api/conversations/claims/${claimId}/status`, {
+      const res = await fetchWithTenant(`/api/conversations/claims/${claimId}/status`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus })
@@ -1427,7 +1580,7 @@ function App() {
 
     try {
       const API_URL = 'https://assuria-production.up.railway.app';
-      const response = await fetch(`${API_URL}/api/conversations/${selectedConversation.id}/message`, {
+      const response = await fetchWithTenant(`${API_URL}/api/conversations/${selectedConversation.id}/message`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content: newMessage })
@@ -2030,7 +2183,7 @@ function App() {
       <div className="flex h-screen w-screen items-center justify-center bg-background text-on-surface">
         <div className="flex flex-col items-center gap-md">
           <div className="w-12 h-12 rounded-full border-4 border-primary border-t-transparent animate-spin"></div>
-          <p className="text-body-lg font-bold">Chargement d'Assuria...</p>
+          <p className="text-body-lg font-bold">Chargement de {tenantDisplayName}...</p>
         </div>
       </div>
     );
@@ -2045,11 +2198,15 @@ function App() {
         
         <div className="glass-panel w-full max-w-[420px] p-xl rounded-3xl flex flex-col gap-lg border border-outline-variant/60 shadow-2xl relative z-10 text-left animate-fade-in">
           <div className="flex flex-col items-center text-center gap-sm">
-            <div className="w-16 h-16 rounded-2xl bg-primary flex items-center justify-center shadow-lg">
-              <span className="material-symbols-outlined text-[36px] text-on-primary-container font-bold" style={{ fontVariationSettings: "'FILL' 1" }}>shield</span>
-            </div>
+            {tenantLogoUrl ? (
+              <img src={tenantLogoUrl} alt={tenantDisplayName} className="h-16 object-contain mb-xs" />
+            ) : (
+              <div className="w-16 h-16 rounded-2xl bg-primary flex items-center justify-center shadow-lg">
+                <span className="material-symbols-outlined text-[36px] text-on-primary-container font-bold" style={{ fontVariationSettings: "'FILL' 1" }}>shield</span>
+              </div>
+            )}
             <div>
-              <h1 className="font-headline-md text-headline-md text-on-surface m-0 font-bold">Assuria AI</h1>
+              <h1 className="font-headline-md text-headline-md text-on-surface m-0 font-bold">{tenantDisplayName}</h1>
               <p className="text-body-sm text-on-surface-variant m-0 mt-xs">Portail d'Administration Sécurisé</p>
             </div>
           </div>
@@ -2134,6 +2291,7 @@ function App() {
       onLogout={handleLogout}
       showInstallBtn={showInstallBtn}
       handleInstallApp={handleInstallApp}
+      tenantInfo={tenantInfo}
     >
       <div className={`content-area ${activeTab === 'conversations' ? 'h-full flex flex-col overflow-hidden flex-1' : ''}`}>
           {activeTab === 'dashboard' ? (
@@ -3350,6 +3508,104 @@ function App() {
                     className="px-6 py-2.5 bg-primary text-on-primary font-bold rounded-xl hover:opacity-90 active:scale-95 transition-all border-none cursor-pointer"
                   >
                     Sauvegarder les infos
+                  </button>
+                </div>
+              </div>
+
+              {/* Section 5: Identité du cabinet */}
+              <div className="glass-panel p-xl flex flex-col gap-md">
+                <div className="flex items-center gap-sm mb-xs">
+                  <span className="material-symbols-outlined text-primary text-[28px]">brush</span>
+                  <h3 className="text-[18px] font-bold text-on-surface m-0">Identité du cabinet (Design & Logo)</h3>
+                </div>
+                <p className="text-body-sm text-on-surface-variant m-0">
+                  Personnalisez l'apparence visuelle globale de votre portail conseiller et de la page de login. Ces modifications s'appliqueront instantanément pour l'ensemble de vos collaborateurs.
+                </p>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-md mt-xs">
+                  <div className="flex flex-col gap-xs">
+                    <label className="text-body-md font-bold text-on-surface">Nom d'affichage du cabinet</label>
+                    <input
+                      type="text"
+                      className="p-md bg-surface-container-high border border-outline-variant/60 rounded-xl text-on-surface font-body-md focus:border-primary focus:outline-none transition-colors"
+                      value={tenantDisplayName}
+                      onChange={(e) => setTenantDisplayName(e.target.value)}
+                      placeholder="Ex: Assuria Cabinet"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-xs">
+                    <label className="text-body-md font-bold text-on-surface">URL du Logo du cabinet</label>
+                    <input
+                      type="text"
+                      className="p-md bg-surface-container-high border border-outline-variant/60 rounded-xl text-on-surface font-body-md focus:border-primary focus:outline-none transition-colors"
+                      value={tenantLogoUrl}
+                      onChange={(e) => setTenantLogoUrl(e.target.value)}
+                      placeholder="Ex: https://domaine.com/logo.png"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-md mt-xs">
+                  <div className="flex flex-col gap-xs">
+                    <label className="text-body-md font-bold text-on-surface">Couleur Primaire</label>
+                    <div className="flex items-center gap-md">
+                      <input
+                        type="color"
+                        className="w-12 h-12 rounded-xl bg-transparent border border-outline-variant/60 cursor-pointer p-0"
+                        value={tenantPrimaryColor}
+                        onChange={(e) => setTenantPrimaryColor(e.target.value)}
+                      />
+                      <input
+                        type="text"
+                        className="p-md flex-1 bg-surface-container-high border border-outline-variant/60 rounded-xl text-on-surface font-body-md focus:border-primary focus:outline-none transition-colors"
+                        value={tenantPrimaryColor}
+                        onChange={(e) => setTenantPrimaryColor(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-xs">
+                    <label className="text-body-md font-bold text-on-surface">Couleur Secondaire</label>
+                    <div className="flex items-center gap-md">
+                      <input
+                        type="color"
+                        className="w-12 h-12 rounded-xl bg-transparent border border-outline-variant/60 cursor-pointer p-0"
+                        value={tenantSecondaryColor}
+                        onChange={(e) => setTenantSecondaryColor(e.target.value)}
+                      />
+                      <input
+                        type="text"
+                        className="p-md flex-1 bg-surface-container-high border border-outline-variant/60 rounded-xl text-on-surface font-body-md focus:border-primary focus:outline-none transition-colors"
+                        value={tenantSecondaryColor}
+                        onChange={(e) => setTenantSecondaryColor(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Prévisualisation */}
+                <div className="p-md rounded-xl border border-outline-variant/30 bg-surface-container-low flex flex-col gap-xs mt-sm">
+                  <span className="text-[11px] uppercase tracking-wider text-on-surface-variant font-bold">Aperçu en temps réel</span>
+                  <div className="flex items-center gap-md p-sm bg-background/50 rounded-lg border border-outline-variant/20">
+                    <div 
+                      className="w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs"
+                      style={{ backgroundColor: tenantPrimaryColor, color: '#000000' }}
+                    >
+                      {tenantDisplayName.substring(0, 2).toUpperCase()}
+                    </div>
+                    <div>
+                      <h4 className="m-0 text-sm font-bold text-on-surface" style={{ color: tenantPrimaryColor }}>{tenantDisplayName}</h4>
+                      <p className="m-0 text-xs text-on-surface-variant">Thème actif : <span style={{ color: tenantSecondaryColor }}>Cabinet</span></p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex justify-end mt-sm">
+                  <button
+                    onClick={handleSaveTenantIdentity}
+                    disabled={isTenantSaving}
+                    className="px-6 py-2.5 bg-primary text-on-primary font-bold rounded-xl hover:opacity-90 active:scale-95 transition-all border-none cursor-pointer flex items-center gap-2"
+                  >
+                    {isTenantSaving ? 'Sauvegarde en cours...' : 'Sauvegarder l\'identité'}
                   </button>
                 </div>
               </div>

@@ -19,7 +19,7 @@ function NavItem({ active, onClick, icon, label, badge }) {
   );
 }
 
-export default function Sidebar({ activeTab, setActiveTab, unreadCounts, onNewPolicy, onLogout, t }) {
+export default function Sidebar({ activeTab, setActiveTab, unreadCounts, onNewPolicy, onLogout, t, tenantInfo }) {
   const tabs = [
     { id: 'dashboard', icon: 'dashboard', label: t('sidebar.dashboard') },
     { id: 'conversations', icon: 'chat', label: t('sidebar.messages'), badge: unreadCounts?.messages },
@@ -35,7 +35,11 @@ export default function Sidebar({ activeTab, setActiveTab, unreadCounts, onNewPo
       <aside className="hidden md:flex w-60 h-screen fixed left-0 top-0 border-r border-outline-variant bg-surface flex-col justify-between py-lg px-md z-50 select-none">
         {/* Logo - fixe en haut */}
         <div className="mb-lg px-sm flex-shrink-0">
-          <h1 className="font-headline-md text-headline-md font-bold text-primary m-0">Assuria AI</h1>
+          {tenantInfo?.logo_url ? (
+            <img src={tenantInfo.logo_url} alt={tenantInfo.display_name || "Logo"} className="h-10 object-contain mb-xs" />
+          ) : (
+            <h1 className="font-headline-md text-headline-md font-bold text-primary m-0">{tenantInfo?.display_name || "Assuria AI"}</h1>
+          )}
           <p className="text-on-surface-variant font-label-md text-label-md uppercase tracking-wider m-0">{t('sidebar.advisorPortal')}</p>
         </div>
         

@@ -8,6 +8,10 @@ CREATE TABLE IF NOT EXISTS tenants (
     whatsapp_phone_number_id TEXT UNIQUE,
     whatsapp_token TEXT NOT NULL,
     whatsapp_verify_token TEXT NOT NULL,
+    display_name TEXT,
+    primary_color TEXT DEFAULT '#68dbae',
+    secondary_color TEXT DEFAULT '#bec6e0',
+    logo_url TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 

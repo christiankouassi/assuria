@@ -15,7 +15,8 @@ export default function Layout({
   onLogout,
   showInstallBtn,
   handleInstallApp,
-  t
+  t,
+  tenantInfo
 }) {
   return (
     <div className={`min-h-[100dvh] bg-background text-on-surface font-body-md flex flex-col ${theme === 'dark' ? 'dark' : ''}`}>
@@ -26,6 +27,7 @@ export default function Layout({
         onNewPolicy={onNewPolicy}
         onLogout={onLogout}
         t={t}
+        tenantInfo={tenantInfo}
       />
       <TopBar 
         theme={theme} 
@@ -35,6 +37,7 @@ export default function Layout({
         onLogout={onLogout}
         showInstallBtn={showInstallBtn}
         handleInstallApp={handleInstallApp}
+        tenantInfo={tenantInfo}
       />
       
       {activeTab === 'conversations' ? (

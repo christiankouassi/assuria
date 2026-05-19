@@ -7,12 +7,13 @@ export default function TopBar({
   toggleNotifications, 
   onLogout,
   showInstallBtn,
-  handleInstallApp
+  handleInstallApp,
+  tenantInfo
 }) {
   return (
     <header className="fixed top-0 right-0 w-full md:w-[calc(100%-240px)] h-16 px-4 md:px-xl bg-surface/80 backdrop-blur-md flex justify-between items-center z-40 border-b border-outline-variant/30">
       <div className="flex items-center gap-lg">
-        <h2 className="md:hidden font-headline-sm text-headline-sm font-bold text-primary m-0">Assuria</h2>
+        <h2 className="md:hidden font-headline-sm text-headline-sm font-bold text-primary m-0">{tenantInfo?.display_name || "Assuria"}</h2>
       </div>
       <div className="flex items-center gap-sm md:gap-md">
         {showInstallBtn && (
