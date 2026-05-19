@@ -54,23 +54,27 @@ const SETTING_DEFAULTS = {
   interactive_buttons_enabled: 'true'
 };
 
-async function getSetting(key) {
+async function getSetting(key, tenantId = null) {
   try {
-    const { data } = await supabase.from('settings').select('value').eq('key', key).maybeSingle();
+    let query = supabase.from('settings').select('value').eq('key', key);
+    if (tenantId) {
+      query = query.eq('tenant_id', tenantId);
+    }
+    const { data } = await query.maybeSingle();
     return data?.value !== undefined && data?.value !== null ? data.value : (SETTING_DEFAULTS[key] || '');
   } catch (err) {
-    console.error(`Erreur getSetting (${key}):`, err.message);
+    console.error(`Erreur getSetting (${key}, tenant: ${tenantId}):`, err.message);
     return SETTING_DEFAULTS[key] || '';
   }
 }
 
-async function getCustomPrompt() {
+async function getCustomPrompt(tenantId = null) {
   const [agentName, welcomeMsg, commStyle, customInstructions, interactiveButtonsEnabled] = await Promise.all([
-    getSetting('agent_name'),
-    getSetting('welcome_message'),
-    getSetting('communication_style'),
-    getSetting('custom_instructions'),
-    getSetting('interactive_buttons_enabled')
+    getSetting('agent_name', tenantId),
+    getSetting('welcome_message', tenantId),
+    getSetting('communication_style', tenantId),
+    getSetting('custom_instructions', tenantId),
+    getSetting('interactive_buttons_enabled', tenantId)
   ]);
 
   const styleInstructions = [];
@@ -101,8 +105,8 @@ ${customInstructions || 'Aucune instruction supplémentaire.'}
   `;
 }
 
-async function getSystemPrompt() {
-  const custom = await getCustomPrompt();
+async function getSystemPrompt(tenantId = null) {
+  const custom = await getCustomPrompt(tenantId);
   return TECHNICAL_PROMPT + '\n\n' + custom;
 }
 
@@ -110,7 +114,7 @@ function clearPromptCache() {
   // Optionnel maintenant que nous lisons directement depuis Supabase ou avec un cache minimal.
 }
 
-async function getAIResponse(userMessage, history = [], clientProfile = {}, clientContext = '') {
+async function getAIResponse(userMessage, history = [], clientProfile = {}, clientContext = '', tenantId = null) {
   console.log('Appel Claude API...');
   try {
     let filteredHistory = [...history];
@@ -119,7 +123,7 @@ async function getAIResponse(userMessage, history = [], clientProfile = {}, clie
         filteredHistory[filteredHistory.length - 1].sender === 'user') {
         filteredHistory.pop();
     }
-    const customPrompt = await getCustomPrompt();
+    const customPrompt = await getCustomPrompt(tenantId);
     let fullSystemPrompt = TECHNICAL_PROMPT + '\n\n' + customPrompt;
 
     if (clientProfile && Object.keys(clientProfile).length > 0) {
@@ -150,7 +154,7 @@ async function getAIResponse(userMessage, history = [], clientProfile = {}, clie
     const clean = text.replace(/```json|```/g, '').trim();
     try {
       const parsed = JSON.parse(clean);
-      const interactiveButtonsEnabled = await getSetting('interactive_buttons_enabled');
+      const interactiveButtonsEnabled = await getSetting('interactive_buttons_enabled', tenantId);
       if (interactiveButtonsEnabled === 'false' && parsed.buttons) {
         delete parsed.buttons;
       }

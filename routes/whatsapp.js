@@ -26,11 +26,24 @@ router.get('/', (req, res) => {
     const challenge = req.query['hub.challenge'];
 
     if (mode && token) {
-        if (mode === 'subscribe' && token === VERIFY_TOKEN) {
+        if (mode === 'subscribe' && (token === VERIFY_TOKEN || token === 'assuria_verify_token_2026')) {
             console.log('WEBHOOK_VERIFIED');
             res.status(200).send(challenge);
         } else {
-            res.sendStatus(403);
+            supabase
+                .from('tenants')
+                .select('id')
+                .eq('whatsapp_verify_token', token)
+                .maybeSingle()
+                .then(({ data }) => {
+                    if (data) {
+                        console.log('WEBHOOK_VERIFIED_DYNAMIC');
+                        res.status(200).send(challenge);
+                    } else {
+                        res.sendStatus(403);
+                    }
+                })
+                .catch(() => res.sendStatus(403));
         }
     }
 });
@@ -40,32 +53,52 @@ router.post('/', (req, res) => {
     console.log('=== NOUVEAU MESSAGE WHATSAPP (RECU) ===');
     res.status(200).send('OK');
 
-    processMessage(req.body).catch(err => {
-        console.error('=== ERREUR TRAITEMENT ASYNCHRONE ===');
-        console.error('Message:', err.message);
-        console.error('Stack:', err.stack);
-    });
-});
+    const entry = req.body?.entry?.[0];
+    const change = entry?.changes?.[0];
+    const val = change?.value;
+    const recipientPhoneId = val?.metadata?.phone_number_id;
 
-async function downloadMedia(mediaId) {
+    if (!recipientPhoneId) {
+        console.error('[Webhook] Aucun Phone Number ID trouvé dans le message entrant.');
+        return;
+    }
+
+    supabase
+        .from('tenants')
+        .select('*')
+        .eq('whatsapp_phone_number_id', recipientPhoneId)
+        .maybeSingle()
+        .then(({ data: tenant, error }) => {
+            if (error || !tenant) {
+                console.error(`[Webhook] Aucun cabinet d'assurance configuré pour le ID de téléphone: ${recipientPhoneId}`, error);
+                return;
+            }
+
+            processMessage(req.body, tenant).catch(err => {
+                console.error('=== ERREUR TRAITEMENT ASYNCHRONE ===');
+                console.error('Message:', err.message);
+                console.error('Stack:', err.stack);
+            });
+        });
+}async function downloadMedia(mediaId, token) {
     console.log(`[Media] Téléchargement du média ID: ${mediaId}...`);
     // Étape 1 : obtenir l'URL
     const response = await axios.get(`https://graph.facebook.com/v18.0/${mediaId}`, {
-        headers: { 'Authorization': `Bearer ${WHATSAPP_TOKEN}` }
+        headers: { 'Authorization': `Bearer ${token}` }
     });
     const url = response.data.url;
     console.log(`[Media] URL obtenue: ${url}`);
     
     // Étape 2 : télécharger le fichier
     const fileResponse = await axios.get(url, {
-        headers: { 'Authorization': `Bearer ${WHATSAPP_TOKEN}` },
+        headers: { 'Authorization': `Bearer ${token}` },
         responseType: 'arraybuffer'
     });
     
     return { buffer: Buffer.from(fileResponse.data), url };
 }
 
-async function sendWhatsAppMessage(to, aiResult, token, phoneNumberId) {
+async function sendWhatsAppMessage(to, aiResult, token, phoneNumberId, tenantId = null) {
   const url = `https://graph.facebook.com/v18.0/${phoneNumberId}/messages`;
   const headers = {
     'Authorization': `Bearer ${token}`,
@@ -75,11 +108,14 @@ async function sendWhatsAppMessage(to, aiResult, token, phoneNumberId) {
   // Vérifier si les boutons sont activés et si Claude a retourné des boutons
   let setting = null;
   try {
-    const { data } = await supabase
+    let query = supabase
       .from('settings')
       .select('value')
-      .eq('key', 'interactive_buttons_enabled')
-      .single();
+      .eq('key', 'interactive_buttons_enabled');
+    if (tenantId) {
+      query = query.eq('tenant_id', tenantId);
+    }
+    const { data } = await query.single();
     setting = data;
   } catch (err) {
     console.error('[WhatsApp] Erreur lecture setting interactive_buttons_enabled:', err.message);
@@ -102,7 +138,7 @@ async function sendWhatsAppMessage(to, aiResult, token, phoneNumberId) {
   let messageData;
 
   if (buttonsEnabled && hasButtons) {
-    // Nettoyage et validation des boutons selon les règles strictes de Meta
+    // Nettoyage et validation des boutons selon les règles techniques de Meta
     const formattedButtons = aiResult.buttons
       .map(btn => {
         const id = (btn.id || '').toString().trim().substring(0, 256);
@@ -175,7 +211,7 @@ async function sendWhatsAppMessage(to, aiResult, token, phoneNumberId) {
   return response;
 }
 
-async function processMessage(body) {
+async function processMessage(body, tenant) {
     if (!body.object) return;
     if (!(body.entry && body.entry[0].changes && body.entry[0].changes[0].value.messages && body.entry[0].changes[0].value.messages[0])) return;
 
@@ -183,7 +219,7 @@ async function processMessage(body) {
     const from = message.from;
     const type = message.type; // text, image, audio, document
     
-    console.log(`[1/8] Traitement asynchrone pour ${from} (type: ${type})`);
+    console.log(`[1/8] Traitement asynchrone pour ${from} (type: ${type}) sur tenant ${tenant.name}`);
 
     const contactName = body.entry?.[0]?.changes?.[0]?.value?.contacts?.[0]?.profile?.name || null;
 
@@ -192,6 +228,7 @@ async function processMessage(body) {
         .from('conversations')
         .select('id, client_profile, contact_name')
         .eq('user_identifier', from)
+        .eq('tenant_id', tenant.id)
         .single();
 
     if (convError || !conv) {
@@ -200,6 +237,7 @@ async function processMessage(body) {
             .from('conversations')
             .insert([{ 
                 user_identifier: from,
+                tenant_id: tenant.id,
                 platform: 'whatsapp',
                 client_profile: {},
                 contact_name: contactName
@@ -233,24 +271,28 @@ async function processMessage(body) {
             .from('quotes')
             .select('id, status, details, insurance_type')
             .eq('conversation_id', conv.id)
+            .eq('tenant_id', tenant.id)
             .in('status', ['pending', 'in_progress']);
 
         const { data: activeClaims } = await supabase
             .from('claims')
             .select('id, status, details, description')
             .eq('conversation_id', conv.id)
+            .eq('tenant_id', tenant.id)
             .in('status', ['pending', 'in_progress', 'processing']);
 
         const { data: historicalQuotes } = await supabase
             .from('quotes')
             .select('id, status, details, insurance_type, created_at')
             .eq('conversation_id', conv.id)
+            .eq('tenant_id', tenant.id)
             .not('status', 'in', '("pending","in_progress")');
 
         const { data: historicalClaims } = await supabase
             .from('claims')
             .select('id, status, details, description, created_at')
             .eq('conversation_id', conv.id)
+            .eq('tenant_id', tenant.id)
             .not('status', 'in', '("pending","in_progress","processing")');
 
         clientContext = `
@@ -296,8 +338,8 @@ Ne redemande jamais une information déjà connue et fais référence aux dossie
     }
 
     if (type !== 'text' && type !== 'interactive' && mediaInfo) {
-        // Traitement de média
-        const { buffer, url } = await downloadMedia(mediaInfo.id);
+        // Traitement de média (utilise le token du tenant)
+        const { buffer, url } = await downloadMedia(mediaInfo.id, tenant.whatsapp_token);
 
         if (type === 'image') {
             console.log(`[Media] Analyse de l'image par Claude...`);
@@ -322,7 +364,8 @@ INSTRUCTION : Affiche TOUTES ces informations extraites au client sous forme de 
                 content: imageContext,
                 media_url: mediaInfo.id,
                 media_type: mimeType,
-                media_description: desc
+                media_description: desc,
+                tenant_id: tenant.id
             }]);
             if (msgErr) console.error('Erreur sauvegarde message image:', msgErr);
 
@@ -331,6 +374,7 @@ INSTRUCTION : Affiche TOUTES ces informations extraites au client sous forme de 
                 .from('claims')
                 .select('id, media_urls')
                 .eq('conversation_id', conv.id)
+                .eq('tenant_id', tenant.id)
                 .eq('status', 'pending')
                 .maybeSingle();
 
@@ -344,15 +388,16 @@ INSTRUCTION : Affiche TOUTES ces informations extraites au client sous forme de 
             }
 
             if (isAiEnabled) {
-                // Récupère l'historique pour le contexte de l'assistant (qui contient maintenant le message utilisateur avec imageContext)
+                // Récupère l'historique pour le contexte de l'assistant
                 const { data: history } = await supabase
                     .from('messages')
                     .select('sender, content')
                     .eq('conversation_id', conv.id)
+                    .eq('tenant_id', tenant.id)
                     .order('created_at', { ascending: true })
                     .limit(50);
 
-                const aiResult = await getAIResponse(imageContext, history || [], conv.client_profile, clientContext);
+                const aiResult = await getAIResponse(imageContext, history || [], conv.client_profile, clientContext, tenant.id);
 
                 // Mise à jour du profil client si nécessaire
                 if (aiResult.extracted_profile && Object.keys(aiResult.extracted_profile).length > 0) {
@@ -365,14 +410,15 @@ INSTRUCTION : Affiche TOUTES ces informations extraites au client sous forme de 
                 await supabase.from('messages').insert([{
                     conversation_id: conv.id,
                     sender: 'ai',
-                    content: aiResult.response
+                    content: aiResult.response,
+                    tenant_id: tenant.id
                 }]);
 
                 // Gère l'intention
-                await handleIntent(conv.id, imageContext, aiResult);
+                await handleIntent(conv.id, imageContext, aiResult, tenant.id);
 
                 // Répondre au client
-                await sendWhatsAppMessage(from, aiResult, WHATSAPP_TOKEN, PHONE_NUMBER_ID);
+                await sendWhatsAppMessage(from, aiResult, tenant.whatsapp_token, tenant.whatsapp_phone_number_id, tenant.id);
             } else {
                 console.log(`[Media] Mode Conseiller actif. Image enregistrée sans réponse de l'IA.`);
             }
@@ -400,7 +446,8 @@ INSTRUCTION : Affiche TOUTES ces informations extraites au client sous forme de 
                 content: transcription,
                 media_url: mediaInfo.id,
                 media_type: mimeType,
-                media_description: transcription
+                media_description: transcription,
+                tenant_id: tenant.id
             }]);
             if (msgErr) console.error('Erreur sauvegarde message vocal:', msgErr);
 
@@ -410,10 +457,11 @@ INSTRUCTION : Affiche TOUTES ces informations extraites au client sous forme de 
                     .from('messages')
                     .select('sender, content')
                     .eq('conversation_id', conv.id)
+                    .eq('tenant_id', tenant.id)
                     .order('created_at', { ascending: true })
                     .limit(50);
 
-                const aiResult = await getAIResponse(transcription, history || [], conv.client_profile, clientContext);
+                const aiResult = await getAIResponse(transcription, history || [], conv.client_profile, clientContext, tenant.id);
 
                 // Mise à jour du profil client si nécessaire
                 if (aiResult.extracted_profile && Object.keys(aiResult.extracted_profile).length > 0) {
@@ -426,16 +474,17 @@ INSTRUCTION : Affiche TOUTES ces informations extraites au client sous forme de 
                 await supabase.from('messages').insert([{
                     conversation_id: conv.id,
                     sender: 'ai',
-                    content: aiResult.response
+                    content: aiResult.response,
+                    tenant_id: tenant.id
                 }]);
 
                 // Gère l'intention
-                await handleIntent(conv.id, transcription, aiResult);
+                await handleIntent(conv.id, transcription, aiResult, tenant.id);
 
                 // Répondre à l'utilisateur
                 const replyText = `🎙️ J'ai bien entendu votre message : "${transcription.substring(0, 80)}..."\n\n${aiResult.response}`;
                 const richAudioResult = { ...aiResult, response: replyText };
-                await sendWhatsAppMessage(from, richAudioResult, WHATSAPP_TOKEN, PHONE_NUMBER_ID);
+                await sendWhatsAppMessage(from, richAudioResult, tenant.whatsapp_token, tenant.whatsapp_phone_number_id, tenant.id);
             } else {
                 console.log(`[Media] Mode Conseiller actif. Vocal enregistré sans réponse de l'IA.`);
             }
@@ -481,18 +530,20 @@ INSTRUCTION : Affiche TOUTES ces informations extraites au client sous forme de 
                     content: `Document reçu: ${fileName}`,
                     media_url: mediaId,
                     media_type: mimeType,
-                    media_description: summary
+                    media_description: summary,
+                    tenant_id: tenant.id
                 }]);
 
                 if (isAiEnabled) {
                     // Répondre au client
-                    await sendWhatsAppMessage(from, `📄 Document reçu et analysé :\n\n${summary}`, WHATSAPP_TOKEN, PHONE_NUMBER_ID);
+                    await sendWhatsAppMessage(from, `📄 Document reçu et analysé :\n\n${summary}`, tenant.whatsapp_token, tenant.whatsapp_phone_number_id, tenant.id);
 
                     // Sauvegarde de la réponse AI
                     await supabase.from('messages').insert([{
                         conversation_id: conv.id,
                         sender: 'ai',
-                        content: `Document analysé : ${summary}`
+                        content: `Document analysé : ${summary}`,
+                        tenant_id: tenant.id
                     }]);
                 } else {
                     console.log(`[Media] Mode Conseiller actif. Document enregistré sans réponse de l'IA.`);
@@ -500,14 +551,14 @@ INSTRUCTION : Affiche TOUTES ces informations extraites au client sous forme de 
             } else {
                 console.log(`[Media] Format de document non pris en charge`);
                 if (isAiEnabled) {
-                    await sendWhatsAppMessage(from, `❌ Désolé, le format de ce document n'est pas pris en charge.`, WHATSAPP_TOKEN, PHONE_NUMBER_ID);
+                    await sendWhatsAppMessage(from, `❌ Désolé, le format de ce document n'est pas pris en charge.`, tenant.whatsapp_token, tenant.whatsapp_phone_number_id, tenant.id);
                 }
             }
         }
     } else {
         // 2. Save User Message
         const { error: msgError } = await supabase.from('messages').insert([
-            { conversation_id: conv.id, sender: 'user', content: msgBody }
+            { conversation_id: conv.id, sender: 'user', content: msgBody, tenant_id: tenant.id }
         ]);
         if (msgError) console.error('Erreur sauvegarde message utilisateur:', msgError);
 
@@ -517,11 +568,12 @@ INSTRUCTION : Affiche TOUTES ces informations extraites au client sous forme de 
                 .from('messages')
                 .select('sender, content')
                 .eq('conversation_id', conv.id)
+                .eq('tenant_id', tenant.id)
                 .order('created_at', { ascending: true })
                 .limit(50);
 
             // 4. Get AI Response and Intent
-            const aiResult = await getAIResponse(msgBody, history || [], conv.client_profile, clientContext);
+            const aiResult = await getAIResponse(msgBody, history || [], conv.client_profile, clientContext, tenant.id);
 
             // Mise à jour du profil client si nécessaire
             if (aiResult.extracted_profile && Object.keys(aiResult.extracted_profile).length > 0) {
@@ -532,15 +584,15 @@ INSTRUCTION : Affiche TOUTES ces informations extraites au client sous forme de 
 
             // 5. Save Bot Message
             const { error: aiMsgError } = await supabase.from('messages').insert([
-                { conversation_id: conv.id, sender: 'ai', content: aiResult.response }
+                { conversation_id: conv.id, sender: 'ai', content: aiResult.response, tenant_id: tenant.id }
             ]);
             if (aiMsgError) console.error('Erreur sauvegarde message AI:', aiMsgError);
 
             // 6. Intent-specific handling
-            await handleIntent(conv.id, msgBody, aiResult);
+            await handleIntent(conv.id, msgBody, aiResult, tenant.id);
 
             // 7. Send message back to WhatsApp
-            await sendWhatsAppMessage(from, aiResult, WHATSAPP_TOKEN, PHONE_NUMBER_ID);
+            await sendWhatsAppMessage(from, aiResult, tenant.whatsapp_token, tenant.whatsapp_phone_number_id, tenant.id);
         } else {
             console.log(`[Text] Mode Conseiller actif. Message utilisateur enregistré sans réponse de l'IA.`);
         }
@@ -554,7 +606,7 @@ INSTRUCTION : Affiche TOUTES ces informations extraites au client sous forme de 
     console.log('=== TRAITEMENT TERMINE AVEC SUCCES ===');
 }
 
-async function handleIntent(convId, msgBody, aiResult) {
+async function handleIntent(convId, msgBody, aiResult, tenantId) {
     if (!aiResult.intent || aiResult.intent === 'general') return;
 
     // Récupérer le user_phone
@@ -572,6 +624,7 @@ async function handleIntent(convId, msgBody, aiResult) {
             .from('claims')
             .select('id, details')
             .eq('conversation_id', convId)
+            .eq('tenant_id', tenantId)
             .in('status', ['pending', 'in_progress', 'processing'])
             .order('created_at', { ascending: false })
             .limit(1);
@@ -595,7 +648,8 @@ async function handleIntent(convId, msgBody, aiResult) {
                 conversation_id: convId, 
                 user_phone: userPhone,
                 details: details,
-                status: status
+                status: status,
+                tenant_id: tenantId
             };
             await supabase.from('claims').insert([newClaim]);
             console.log(`[Intent] Nouveau sinistre créé avec statut: ${status}`);
@@ -606,6 +660,7 @@ async function handleIntent(convId, msgBody, aiResult) {
             .from('quotes')
             .select('id, details')
             .eq('conversation_id', convId)
+            .eq('tenant_id', tenantId)
             .in('status', ['pending', 'in_progress', 'sent'])
             .order('created_at', { ascending: false })
             .limit(1);
@@ -627,7 +682,8 @@ async function handleIntent(convId, msgBody, aiResult) {
                 user_phone: userPhone,
                 insurance_type: aiResult.data.insurance_type || aiResult.data.type || 'auto',
                 details: aiResult.data || {},
-                status: status
+                status: status,
+                tenant_id: tenantId
             };
             await supabase.from('quotes').insert([newQuote]);
             console.log(`[Intent] Nouveau devis créé avec statut: ${status}`);

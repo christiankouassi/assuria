@@ -16,10 +16,10 @@ router.post('/:id/message', async (req, res) => {
     }
 
     try {
-        // 1. Récupérer le numéro du client depuis la conversation
+        // 1. Récupérer le numéro du client depuis la conversation avec son tenant
         const { data: conv, error: convError } = await supabase
             .from('conversations')
-            .select('user_identifier, platform')
+            .select('user_identifier, platform, tenant_id, tenants(whatsapp_token, whatsapp_phone_number_id)')
             .eq('id', conversationId)
             .single();
 
@@ -29,21 +29,23 @@ router.post('/:id/message', async (req, res) => {
         }
 
         const to = conv.user_identifier;
+        const activeToken = conv.tenants?.whatsapp_token || WHATSAPP_TOKEN;
+        const activePhoneId = conv.tenants?.whatsapp_phone_number_id || PHONE_NUMBER_ID;
 
         // 2. Envoyer via l'API WhatsApp Business si c'est une conv whatsapp
         if (conv.platform === 'whatsapp') {
-            console.log(`[Conseiller] Envoi WhatsApp à ${to}...`);
+            console.log(`[Conseiller] Envoi WhatsApp à ${to} via PhoneID: ${activePhoneId}...`);
             try {
                 const waResponse = await axios({
                     method: 'POST',
-                    url: `https://graph.facebook.com/v19.0/${PHONE_NUMBER_ID}/messages`,
+                    url: `https://graph.facebook.com/v19.0/${activePhoneId}/messages`,
                     data: {
                         messaging_product: 'whatsapp',
                         to: to,
                         type: 'text',
                         text: { body: content }
                     },
-                    headers: { 'Authorization': `Bearer ${WHATSAPP_TOKEN}` }
+                    headers: { 'Authorization': `Bearer ${activeToken}` }
                 });
                 console.log(`[Conseiller] WhatsApp a répondu: ${waResponse.status} ${waResponse.statusText}`);
             } catch (waErr) {
@@ -59,7 +61,12 @@ router.post('/:id/message', async (req, res) => {
         const { data: newMessage, error: msgError } = await supabase
             .from('messages')
             .insert([
-                { conversation_id: conversationId, sender: 'advisor', content: content }
+                { 
+                    conversation_id: conversationId, 
+                    sender: 'advisor', 
+                    content: content,
+                    tenant_id: conv.tenant_id
+                }
             ])
             .select()
             .single();
@@ -82,16 +89,23 @@ router.post('/:id/message', async (req, res) => {
     }
 });
 
+// Helper to get tenant_id from headers
+const getTenantId = (req) => {
+    return req.headers['x-tenant-id'] || 'f70a0bcb-2487-42f1-bd63-cda1acd9ce91';
+};
+
 // PUT /api/conversations/quotes/:id/status
 router.put('/quotes/:id/status', async (req, res) => {
     const { id } = req.params;
     const { status } = req.body;
+    const tenantId = getTenantId(req);
 
     try {
         const { data, error } = await supabase
             .from('quotes')
             .update({ status })
             .eq('id', id)
+            .eq('tenant_id', tenantId)
             .select();
 
         if (error) {
@@ -109,12 +123,14 @@ router.put('/quotes/:id/status', async (req, res) => {
 router.put('/claims/:id/status', async (req, res) => {
     const { id } = req.params;
     const { status } = req.body;
+    const tenantId = getTenantId(req);
 
     try {
         const { data, error } = await supabase
             .from('claims')
             .update({ status })
             .eq('id', id)
+            .eq('tenant_id', tenantId)
             .select();
 
         if (error) {
