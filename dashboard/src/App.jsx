@@ -152,6 +152,7 @@ const translations = {
       autoLanguage: "Détecter automatiquement la langue du client",
       onlyFr: "Répondre uniquement en français",
       onlyAr: "Répondre uniquement en arabe",
+      interactiveButtonsLabel: "Activer les boutons interactifs WhatsApp",
       customInstructionsLabel: "Instructions personnalisées pour votre agent IA",
       customInstructionsDesc: "Ces instructions personnalisent le comportement de votre agent. Les règles techniques de gestion des dossiers sont gérées automatiquement par le système et ne peuvent pas être modifiées ici.",
       customInstructionsPlaceholder: "Écrivez ici toutes les instructions spécifiques que vous souhaitez donner à votre agent. Par exemple : Toujours terminer chaque message par nos coordonnées. Ne jamais mentionner les tarifs. Toujours proposer un rappel téléphonique si le client hésite...",
@@ -342,6 +343,7 @@ const translations = {
       autoLanguage: "Automatically detect client's language",
       onlyFr: "Reply in French only",
       onlyAr: "Reply in Arabic only",
+      interactiveButtonsLabel: "Enable WhatsApp interactive buttons",
       customInstructionsLabel: "Custom instructions for your AI agent",
       customInstructionsDesc: "These instructions personalize your agent's behavior. Technical file management rules are handled automatically by the system and cannot be edited here.",
       customInstructionsPlaceholder: "Write any specific instructions you want to give your agent. For example: Always end each message with our contact info. Never mention prices. Always offer a call back if the client hesitates...",
@@ -532,6 +534,7 @@ const translations = {
       autoLanguage: "الكشف التلقائي عن لغة العميل",
       onlyFr: "الرد باللغة الفرنسية فقط",
       onlyAr: "الرد باللغة العربية فقط",
+      interactiveButtonsLabel: "تفعيل أزرار واتساب التفاعلية",
       customInstructionsLabel: "تعليمات مخصصة لوكيل الذكاء الاصطناعي الخاص بك",
       customInstructionsDesc: "تعمل هذه التعليمات على تخصيص سلوك وكيلك. تتم إدارة القواعد الفنية لإدارة الملفات تلقائيًا بواسطة النظام ولا يمكن تعديلها هنا.",
       customInstructionsPlaceholder: "اكتب هنا أي تعليمات محددة تريد إعطاءها لوكيلك. على سبيل المثال: قم دائمًا بإنهاء كل رسالة ببيانات الاتصال بنا. لا تذكر الأسعار أبدًا. اعرض دائمًا معاودة الاتصال إذا تردد العميل...",
@@ -664,6 +667,7 @@ function App() {
   const [commStyle, setCommStyle] = useState('numbered_options,auto_language');
   const [customInstructions, setCustomInstructions] = useState('');
   const [isAgentSettingsSaving, setIsAgentSettingsSaving] = useState(false);
+  const [interactiveButtons, setInteractiveButtons] = useState(true);
 
   const triggerNotification = (text) => {
     const newNotif = {
@@ -706,6 +710,9 @@ function App() {
         if (data.welcome_message !== undefined) setWelcomeMessage(data.welcome_message);
         if (data.communication_style !== undefined) setCommStyle(data.communication_style);
         if (data.custom_instructions !== undefined) setCustomInstructions(data.custom_instructions);
+        if (data.interactive_buttons_enabled !== undefined) {
+          setInteractiveButtons(data.interactive_buttons_enabled === 'true');
+        }
       }
     } catch (e) {
       console.error('Erreur de récupération des paramètres de l\'agent:', e);
@@ -752,7 +759,8 @@ function App() {
           agent_name: agentNameState,
           welcome_message: welcomeMessage,
           communication_style: commStyle,
-          custom_instructions: customInstructions
+          custom_instructions: customInstructions,
+          interactive_buttons_enabled: interactiveButtons ? 'true' : 'false'
         })
       });
       if (res.ok) {
@@ -2734,6 +2742,22 @@ function App() {
                         </label>
                       );
                     })}
+                  </div>
+                </div>
+
+                {/* Champ 3.5: Boutons interactifs WhatsApp */}
+                <div className="flex flex-col gap-xs text-left">
+                  <label className="text-body-md font-bold text-on-surface">{t('settingsTab.interactiveButtonsLabel', 'Activer les boutons interactifs WhatsApp')}</label>
+                  <div className="flex items-center gap-md mt-xs">
+                    <label className="flex items-center gap-md p-md rounded-xl border bg-surface-container-high border-outline-variant/40 text-on-surface hover:bg-surface-container transition-all cursor-pointer select-none w-full md:w-auto">
+                      <input 
+                        type="checkbox"
+                        checked={interactiveButtons}
+                        onChange={(e) => setInteractiveButtons(e.target.checked)}
+                        className="w-4 h-4 accent-primary rounded cursor-pointer"
+                      />
+                      <span className="text-body-md font-bold">{t('settingsTab.interactiveButtonsLabel', 'Activer les boutons interactifs WhatsApp')}</span>
+                    </label>
                   </div>
                 </div>
 

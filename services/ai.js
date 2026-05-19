@@ -11,7 +11,16 @@ Tu parles français, arabe et darija selon la langue du client.
 
 FORMAT DE RÉPONSE OBLIGATOIRE :
 Tu dois TOUJOURS répondre en JSON strict sans markdown :
-{"intent": "general|claim|quote", "response": "message au client", "data": {}}
+{
+  "intent": "general|claim|quote",
+  "response": "message au client",
+  "data": {},
+  "buttons": [  // optionnel — seulement quand nécessaire (maximum 3)
+    {"id": "devis", "title": "Demander un devis"},
+    {"id": "sinistre", "title": "Déclarer un sinistre"},
+    {"id": "question", "title": "Poser une question"}
+  ]
+}
 
 GESTION BASE DE DONNÉES :
 - Tu as accès au profil complet du client injecté dans le contexte
@@ -25,13 +34,24 @@ RÈGLES MÉTIER :
 - Collecte les informations progressivement
 - Pour les sinistres : type → date → lieu → description → photos
 - Pour les devis : type assurance → détails bien → usage → valeur
+
+BOUTONS INTERACTIFS :
+Tu peux optionnellement inclure des boutons cliquables dans ta réponse.
+Utilise les boutons UNIQUEMENT quand tu proposes des choix clairs au client.
+Maximum 3 boutons. Titres courts (max 20 caractères).
+N'utilise PAS de boutons pour des questions ouvertes ou des confirmations simples.
+Exemples où utiliser des boutons :
+- Début de conversation : choix entre devis/sinistre/question
+- Choix du type d'assurance : auto/habitation/santé/vie
+- Confirmation : oui/non
 `;
 
 const SETTING_DEFAULTS = {
   agent_name: 'AssurIA',
   welcome_message: 'Bonjour ! Je suis AssurIA, l assistant intelligent de votre cabinet d assurance. Comment puis-je vous aider aujourd hui ?',
   communication_style: 'numbered_options,auto_language',
-  custom_instructions: ''
+  custom_instructions: '',
+  interactive_buttons_enabled: 'true'
 };
 
 async function getSetting(key) {
@@ -45,11 +65,12 @@ async function getSetting(key) {
 }
 
 async function getCustomPrompt() {
-  const [agentName, welcomeMsg, commStyle, customInstructions] = await Promise.all([
+  const [agentName, welcomeMsg, commStyle, customInstructions, interactiveButtonsEnabled] = await Promise.all([
     getSetting('agent_name'),
     getSetting('welcome_message'),
     getSetting('communication_style'),
-    getSetting('custom_instructions')
+    getSetting('custom_instructions'),
+    getSetting('interactive_buttons_enabled')
   ]);
 
   const styleInstructions = [];
@@ -60,6 +81,10 @@ async function getCustomPrompt() {
   if (commStyle.includes('only_fr')) styleInstructions.push('Réponds uniquement en français.');
   if (commStyle.includes('only_ar')) styleInstructions.push('Réponds uniquement en arabe.');
 
+  const buttonInstruction = interactiveButtonsEnabled === 'false'
+    ? "ATTENTION : Les boutons interactifs WhatsApp sont désactivés. Ne renvoie JAMAIS de champ 'buttons' dans ton JSON."
+    : "";
+
   return `
 IDENTITÉ DE L'AGENT :
 Tu t'appelles ${agentName}.
@@ -67,6 +92,9 @@ Message d'accueil pour un nouveau client : ${welcomeMsg}
 
 STYLE DE COMMUNICATION :
 ${styleInstructions.join('\n')}
+
+BOUTONS INTERACTIFS :
+${buttonInstruction || 'Tu peux utiliser les boutons interactifs selon les règles techniques ci-dessus.'}
 
 INSTRUCTIONS SPÉCIFIQUES DU CABINET :
 ${customInstructions || 'Aucune instruction supplémentaire.'}
@@ -121,7 +149,12 @@ async function getAIResponse(userMessage, history = [], clientProfile = {}, clie
     console.log('Réponse Claude:', text);
     const clean = text.replace(/```json|```/g, '').trim();
     try {
-      return JSON.parse(clean);
+      const parsed = JSON.parse(clean);
+      const interactiveButtonsEnabled = await getSetting('interactive_buttons_enabled');
+      if (interactiveButtonsEnabled === 'false' && parsed.buttons) {
+        delete parsed.buttons;
+      }
+      return parsed;
     } catch {
       return { intent: 'general', response: text.trim(), data: {} };
     }

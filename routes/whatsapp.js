@@ -65,21 +65,64 @@ async function downloadMedia(mediaId) {
     return { buffer: Buffer.from(fileResponse.data), url };
 }
 
-async function sendWhatsAppMessage(to, text) {
+async function sendWhatsAppMessage(to, aiResult) {
     console.log(`[WhatsApp] Envoi du message à ${to}...`);
     try {
-        const waResponse = await axios({
-            method: 'POST',
-            url: `https://graph.facebook.com/v19.0/${PHONE_NUMBER_ID}/messages`,
-            data: {
+        const baseUrl = `https://graph.facebook.com/v19.0/${PHONE_NUMBER_ID}/messages`;
+        const headers = {
+            'Authorization': `Bearer ${WHATSAPP_TOKEN}`,
+            'Content-Type': 'application/json'
+        };
+
+        // Query database to see if interactive buttons are enabled
+        let interactiveButtonsEnabled = true;
+        try {
+            const { data: buttonsSetting } = await supabase.from('settings').select('value').eq('key', 'interactive_buttons_enabled').maybeSingle();
+            if (buttonsSetting) {
+                interactiveButtonsEnabled = buttonsSetting.value === 'true';
+            }
+        } catch (dbErr) {
+            console.error('[WhatsApp] Erreur lecture setting interactive_buttons_enabled:', dbErr.message);
+        }
+
+        let messageData;
+
+        // Check if aiResult is an object with buttons
+        if (aiResult && typeof aiResult === 'object' && aiResult.buttons && aiResult.buttons.length > 0 && interactiveButtonsEnabled) {
+            console.log(`[WhatsApp] Envoi d'un message interactif avec boutons à ${to}...`);
+            messageData = {
+                messaging_product: 'whatsapp',
+                to: to,
+                type: 'interactive',
+                interactive: {
+                    type: 'button',
+                    body: { text: aiResult.response },
+                    action: {
+                        buttons: aiResult.buttons.map(btn => ({
+                            type: 'reply',
+                            reply: { id: btn.id, title: btn.title }
+                        }))
+                    }
+                }
+            };
+        } else {
+            console.log(`[WhatsApp] Envoi d'un message texte simple à ${to}...`);
+            const textBody = aiResult && typeof aiResult === 'object' ? aiResult.response : aiResult;
+            messageData = {
                 messaging_product: 'whatsapp',
                 to: to,
                 type: 'text',
-                text: { body: text }
-            },
-            headers: { 'Authorization': `Bearer ${WHATSAPP_TOKEN}` }
+                text: { body: textBody }
+            };
+        }
+
+        const response = await axios({
+            method: 'POST',
+            url: baseUrl,
+            data: messageData,
+            headers: headers
         });
-        console.log(`[WhatsApp] Statut réponse: ${waResponse.status} ${waResponse.statusText}`);
+        console.log(`[WhatsApp] Statut réponse: ${response.status} ${response.statusText}`);
     } catch (waErr) {
         console.error('[WhatsApp] Erreur envoi:', waErr.response ? JSON.stringify(waErr.response.data) : waErr.message);
     }
@@ -180,8 +223,13 @@ Ne redemande jamais une information déjà connue et fais référence aux dossie
     let filename = null;
     let caption = null;
 
-    if (type === 'text') {
-        msgBody = message.text ? message.text.body : "";
+    if (type === 'text' || type === 'interactive') {
+        if (type === 'interactive') {
+            const buttonTitle = message.interactive?.button_reply?.title || "";
+            msgBody = `[Client a cliqué sur : ${buttonTitle}]`;
+        } else {
+            msgBody = message.text ? message.text.body : "";
+        }
         if (!msgBody) return;
     } else if (type === 'video') {
         msgBody = '[Le client a envoyé une vidéo. Réponds-lui que tu ne peux pas encore traiter les vidéos mais que tu peux analyser des photos ou des documents PDF.]';
@@ -198,7 +246,7 @@ Ne redemande jamais une information déjà connue et fais référence aux dossie
         filename = mediaInfo.filename;
     }
 
-    if (type !== 'text' && mediaInfo) {
+    if (type !== 'text' && type !== 'interactive' && mediaInfo) {
         // Traitement de média
         const { buffer, url } = await downloadMedia(mediaInfo.id);
 
@@ -275,7 +323,7 @@ INSTRUCTION : Affiche TOUTES ces informations extraites au client sous forme de 
                 await handleIntent(conv.id, imageContext, aiResult);
 
                 // Répondre au client
-                await sendWhatsAppMessage(from, aiResult.response);
+                await sendWhatsAppMessage(from, aiResult);
             } else {
                 console.log(`[Media] Mode Conseiller actif. Image enregistrée sans réponse de l'IA.`);
             }
@@ -337,7 +385,8 @@ INSTRUCTION : Affiche TOUTES ces informations extraites au client sous forme de 
 
                 // Répondre à l'utilisateur
                 const replyText = `🎙️ J'ai bien entendu votre message : "${transcription.substring(0, 80)}..."\n\n${aiResult.response}`;
-                await sendWhatsAppMessage(from, replyText);
+                const richAudioResult = { ...aiResult, response: replyText };
+                await sendWhatsAppMessage(from, richAudioResult);
             } else {
                 console.log(`[Media] Mode Conseiller actif. Vocal enregistré sans réponse de l'IA.`);
             }
@@ -442,7 +491,7 @@ INSTRUCTION : Affiche TOUTES ces informations extraites au client sous forme de 
             await handleIntent(conv.id, msgBody, aiResult);
 
             // 7. Send message back to WhatsApp
-            await sendWhatsAppMessage(from, aiResult.response);
+            await sendWhatsAppMessage(from, aiResult);
         } else {
             console.log(`[Text] Mode Conseiller actif. Message utilisateur enregistré sans réponse de l'IA.`);
         }
