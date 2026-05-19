@@ -80,7 +80,9 @@ router.post('/', (req, res) => {
                 console.error('Stack:', err.stack);
             });
         });
-}async function downloadMedia(mediaId, token) {
+});
+
+async function downloadMedia(mediaId, token) {
     console.log(`[Media] Téléchargement du média ID: ${mediaId}...`);
     // Étape 1 : obtenir l'URL
     const response = await axios.get(`https://graph.facebook.com/v18.0/${mediaId}`, {
