@@ -88,46 +88,90 @@ async function sendWhatsAppMessage(to, aiResult, token, phoneNumberId) {
   const buttonsEnabled = setting?.value === 'true';
   const hasButtons = aiResult && typeof aiResult === 'object' && 
                      aiResult.buttons && 
+                     Array.isArray(aiResult.buttons) &&
                      aiResult.buttons.length > 0 && 
                      aiResult.buttons.length <= 3;
+
+  // Nettoyage et formatage du texte de la réponse (Markdown en format WhatsApp et suppression des titres #)
+  const responseText = aiResult && typeof aiResult === 'object' ? aiResult.response : aiResult;
+  const cleanResponse = (responseText || '')
+    .replace(/\*\*(.*?)\*\*/g, '*$1*')  // **bold** → *bold*
+    .replace(/#{1,6}\s/g, '')           // supprimer les # titres markdown
+    .trim();
 
   let messageData;
 
   if (buttonsEnabled && hasButtons) {
-    // Message avec boutons interactifs
-    messageData = {
-      messaging_product: 'whatsapp',
-      to: to,
-      type: 'interactive',
-      interactive: {
-        type: 'button',
-        body: { text: aiResult.response },
-        action: {
-          buttons: aiResult.buttons.map(btn => ({
-            type: 'reply',
-            reply: {
-              id: btn.id.substring(0, 256),
-              title: btn.title.substring(0, 20)
-            }
-          }))
+    // Nettoyage et validation des boutons selon les règles strictes de Meta
+    const formattedButtons = aiResult.buttons
+      .map(btn => {
+        const id = (btn.id || '').toString().trim().substring(0, 256);
+        const title = (btn.title || '').toString().trim().substring(0, 20);
+        return { id, title };
+      })
+      .filter(btn => btn.id.length > 0 && btn.title.length > 0);
+
+    if (formattedButtons.length > 0) {
+      // Message avec boutons interactifs
+      messageData = {
+        messaging_product: 'whatsapp',
+        to: to,
+        type: 'interactive',
+        interactive: {
+          type: 'button',
+          body: { text: cleanResponse },
+          action: {
+            buttons: formattedButtons.map(btn => ({
+              type: 'reply',
+              reply: {
+                id: btn.id,
+                title: btn.title
+              }
+            }))
+          }
         }
-      }
-    };
+      };
+    } else {
+      // Fallback si après nettoyage aucun bouton n'est valide
+      messageData = {
+        messaging_product: 'whatsapp',
+        to: to,
+        type: 'text',
+        text: { body: cleanResponse }
+      };
+    }
   } else {
     // Message texte simple
     messageData = {
       messaging_product: 'whatsapp',
       to: to,
       type: 'text',
-      text: { body: aiResult && typeof aiResult === 'object' ? aiResult.response : aiResult }
+      text: { body: cleanResponse }
     };
   }
+
+  console.log(`[WhatsApp] Tentative d'envoi à ${to}... Payload:`, JSON.stringify(messageData));
 
   const response = await fetch(url, {
     method: 'POST',
     headers,
     body: JSON.stringify(messageData)
   });
+
+  const responseData = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    const errorDetails = responseData?.error || {};
+    console.error(`[WhatsApp API Error] Échec de l'envoi du message à ${to}. Code HTTP: ${response.status}`);
+    console.error(`[WhatsApp API Error] Message Meta: "${errorDetails.message || 'Aucun message'}"`);
+    console.error(`[WhatsApp API Error] Code d'erreur Meta: ${errorDetails.code || 'N/A'}`);
+    console.error(`[WhatsApp API Error] Sous-code Meta: ${errorDetails.error_subcode || 'N/A'}`);
+    console.error(`[WhatsApp API Error] FB Trace ID: ${errorDetails.fbtrace_id || 'N/A'}`);
+    
+    throw new Error(`Meta API Error: ${errorDetails.message} (Code: ${errorDetails.code}, Subcode: ${errorDetails.error_subcode})`);
+  }
+
+  console.log(`[WhatsApp] Message envoyé avec succès à ${to}. Message ID:`, responseData?.messages?.[0]?.id);
   return response;
 }
 
