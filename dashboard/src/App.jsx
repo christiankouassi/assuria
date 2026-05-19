@@ -589,6 +589,22 @@ const translations = {
 };
 
 function App() {
+  // 1. Supabase Auth State
+  const [session, setSession] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [authEmail, setAuthEmail] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
+  const [authError, setAuthError] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [isSubmittingAuth, setIsSubmittingAuth] = useState(false);
+
+  // 2. PWA State
+  const [deferredPrompt, setDeferredPrompt] = useState(null);
+  const [showInstallBtn, setShowInstallBtn] = useState(false);
+
+  // 3. Mobile Navigation State
+  const [mobileActivePanel, setMobileActivePanel] = useState('list'); // 'list' | 'chat' | 'info'
+
   const [activeTab, setActiveTab] = useState('dashboard');
   const [language, setLanguage] = useState(localStorage.getItem('language') || 'fr');
   
@@ -682,12 +698,96 @@ function App() {
     }
   };
 
+  // 1. Supabase Auth Mount Logic
   useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session: activeSession } }) => {
+      setSession(activeSession);
+      setAuthLoading(false);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, activeSession) => {
+      setSession(activeSession);
+      setAuthLoading(false);
+    });
+
+    return () => {
+      subscription?.unsubscribe();
+    };
+  }, []);
+
+  // 2. PWA beforeinstallprompt Listener
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      setShowInstallBtn(true);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
+    const handleAppInstalled = () => {
+      setDeferredPrompt(null);
+      setShowInstallBtn(false);
+      triggerNotification("Application installée avec succès !");
+    };
+    window.addEventListener('appinstalled', handleAppInstalled);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.removeEventListener('appinstalled', handleAppInstalled);
+    };
+  }, []);
+
+  const handleInstallApp = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    console.log(`User choice outcome: ${outcome}`);
+    setDeferredPrompt(null);
+    setShowInstallBtn(false);
+  };
+
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut();
+      setSession(null);
+      triggerNotification("Déconnexion réussie.");
+    } catch (e) {
+      console.error("Logout error:", e);
+      triggerNotification("Erreur de déconnexion.");
+    }
+  };
+
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setAuthError('');
+    setIsSubmittingAuth(true);
+    try {
+      const { data: authData, error } = await supabase.auth.signInWithPassword({
+        email: authEmail,
+        password: authPassword
+      });
+      if (error) {
+        setAuthError(error.message === 'Invalid login credentials' ? 'Identifiants de connexion invalides.' : error.message);
+      } else {
+        setSession(authData.session);
+        triggerNotification("Connexion réussie !");
+      }
+    } catch (err) {
+      console.error("Login unexpected error:", err);
+      setAuthError("Une erreur inattendue est survenue.");
+    } finally {
+      setIsSubmittingAuth(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!session) return;
     if (activeTab === 'settings') {
       fetchSystemPrompt();
       fetchAgentSettings();
     }
-  }, [activeTab]);
+  }, [activeTab, session]);
 
   const fetchSystemPrompt = async () => {
     try {
@@ -1070,6 +1170,7 @@ function App() {
   };
 
   useEffect(() => {
+    if (!session) return;
     fetchData();
     
     // Polling toutes les 5 secondes
@@ -1092,7 +1193,7 @@ function App() {
       clearInterval(intervalId);
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [session]);
 
   function handleGlobalNewMessage(payload) {
     const msg = payload.new;
@@ -1134,6 +1235,7 @@ function App() {
   };
 
   useEffect(() => {
+    if (!session) return;
     if (!selectedConversation) return;
     setUnreadCounts(prev => ({ ...prev, [selectedConversation.id]: 0 }));
 
@@ -1150,7 +1252,7 @@ function App() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [selectedConversation]);
+  }, [selectedConversation, session]);
 
   useEffect(() => {
     scrollToBottom();
@@ -1198,6 +1300,7 @@ function App() {
     setSelectedConversation(conv);
     fetchMessages(conv.id);
     setAiMode(conv.client_profile?.ai_mode !== false);
+    setMobileActivePanel('chat');
   };
 
   const handleToggleAiMode = async (enabled) => {
@@ -1922,6 +2025,101 @@ function App() {
     );
   };
 
+  if (authLoading) {
+    return (
+      <div className="flex h-screen w-screen items-center justify-center bg-background text-on-surface">
+        <div className="flex flex-col items-center gap-md">
+          <div className="w-12 h-12 rounded-full border-4 border-primary border-t-transparent animate-spin"></div>
+          <p className="text-body-lg font-bold">Chargement d'Assuria...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!session) {
+    return (
+      <div className="flex min-h-screen w-screen items-center justify-center bg-background p-lg relative overflow-hidden select-none">
+        {/* Decorative Gradients */}
+        <div className="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] rounded-full bg-primary/20 blur-[120px] pointer-events-none" />
+        <div className="absolute bottom-[-20%] right-[-10%] w-[600px] h-[600px] rounded-full bg-secondary/20 blur-[120px] pointer-events-none" />
+        
+        <div className="glass-panel w-full max-w-[420px] p-xl rounded-3xl flex flex-col gap-lg border border-outline-variant/60 shadow-2xl relative z-10 text-left animate-fade-in">
+          <div className="flex flex-col items-center text-center gap-sm">
+            <div className="w-16 h-16 rounded-2xl bg-primary flex items-center justify-center shadow-lg">
+              <span className="material-symbols-outlined text-[36px] text-on-primary-container font-bold" style={{ fontVariationSettings: "'FILL' 1" }}>shield</span>
+            </div>
+            <div>
+              <h1 className="font-headline-md text-headline-md text-on-surface m-0 font-bold">Assuria AI</h1>
+              <p className="text-body-sm text-on-surface-variant m-0 mt-xs">Portail d'Administration Sécurisé</p>
+            </div>
+          </div>
+
+          <form onSubmit={handleLogin} className="flex flex-col gap-md">
+            <div className="flex flex-col gap-xs">
+              <label className="text-body-sm font-bold text-on-surface-variant uppercase tracking-wider">Adresse Email</label>
+              <input 
+                type="email" 
+                required 
+                placeholder="admin@assuria.ma" 
+                value={authEmail}
+                onChange={(e) => setAuthEmail(e.target.value)}
+                className="w-full bg-surface-container-high border border-outline-variant/60 text-on-surface rounded-xl px-4 py-3 text-body-md focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all font-semibold"
+              />
+            </div>
+
+            <div className="flex flex-col gap-xs">
+              <label className="text-body-sm font-bold text-on-surface-variant uppercase tracking-wider">Mot de passe</label>
+              <div className="relative flex items-center">
+                <input 
+                  type={showPassword ? "text" : "password"} 
+                  required 
+                  placeholder="••••••••" 
+                  value={authPassword}
+                  onChange={(e) => setAuthPassword(e.target.value)}
+                  className="w-full bg-surface-container-high border border-outline-variant/60 text-on-surface rounded-xl pl-4 pr-12 py-3 text-body-md focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all font-semibold"
+                />
+                <button 
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-4 bg-transparent border-none text-on-surface-variant hover:text-on-surface cursor-pointer flex items-center"
+                >
+                  <span className="material-symbols-outlined text-[20px]">
+                    {showPassword ? "visibility_off" : "visibility"}
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            {authError && (
+              <div className="p-md rounded-xl bg-error/10 border border-error/20 flex gap-sm items-center animate-fade-in">
+                <span className="material-symbols-outlined text-error text-[20px]">error</span>
+                <p className="text-xs text-error font-medium m-0 leading-relaxed">{authError}</p>
+              </div>
+            )}
+
+            <button 
+              type="submit" 
+              disabled={isSubmittingAuth}
+              className="w-full py-3.5 rounded-xl bg-primary text-on-primary font-bold hover:opacity-90 active:scale-95 transition-all shadow-md cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed text-body-md border-none flex items-center justify-center gap-2 mt-sm"
+            >
+              {isSubmittingAuth ? (
+                <>
+                  <div className="w-5 h-5 rounded-full border-2 border-on-primary border-t-transparent animate-spin"></div>
+                  <span>Connexion...</span>
+                </>
+              ) : (
+                <>
+                  <span className="material-symbols-outlined text-[20px]">login</span>
+                  <span>Se connecter</span>
+                </>
+              )}
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <Layout
       theme={theme}
@@ -1933,6 +2131,9 @@ function App() {
       toggleNotifications={() => setShowNotifications(!showNotifications)}
       onNewPolicy={() => setShowNewPolicyModal(true)}
       t={t}
+      onLogout={handleLogout}
+      showInstallBtn={showInstallBtn}
+      handleInstallApp={handleInstallApp}
     >
       <div className={`content-area ${activeTab === 'conversations' ? 'h-full flex flex-col overflow-hidden flex-1' : ''}`}>
           {activeTab === 'dashboard' ? (
@@ -2083,7 +2284,7 @@ function App() {
                     ) : activeTab === 'conversations' ? (
             <div className="flex flex-1 overflow-hidden h-full">
               {/* Panel 1: Conversation List */}
-              <section className="w-80 flex flex-col border-r border-outline-variant bg-surface-container-lowest">
+              <section className={`w-full md:w-80 flex flex-col border-r border-outline-variant bg-surface-container-lowest ${selectedConversation && mobileActivePanel !== 'list' ? 'hidden md:flex' : 'flex'}`}>
                 <div className="p-md border-b border-outline-variant flex justify-between items-center">
                   <h2 className="font-headline-md text-[18px] text-on-surface">Conversations</h2>
                   <span className="bg-primary/10 text-primary px-2 py-0.5 rounded-full text-[10px] font-bold">
@@ -2134,12 +2335,21 @@ function App() {
               </section>
 
               {/* Panel 2: Chat Interface */}
-              <section className="flex-1 flex flex-col bg-surface-container-lowest relative min-w-0">
+              <section className={`flex-1 flex flex-col bg-surface-container-lowest relative min-w-0 ${!selectedConversation || mobileActivePanel !== 'chat' ? 'hidden md:flex' : 'flex'}`}>
                 {selectedConversation ? (
                   <>
                     {/* Chat Header */}
                     <div className="h-16 px-lg border-b border-outline-variant flex items-center justify-between glass-panel z-10">
                       <div className="flex items-center gap-4">
+                        <button 
+                          onClick={() => {
+                            setSelectedConversation(null);
+                            setMobileActivePanel('list');
+                          }}
+                          className="md:hidden p-2 text-on-surface hover:bg-surface-container rounded-lg border-none bg-transparent cursor-pointer flex items-center"
+                        >
+                          <span className="material-symbols-outlined text-[24px]">arrow_back</span>
+                        </button>
                         <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg ${getInitialsColor(selectedConversation.contact_name || selectedConversation.user_identifier)}`}>
                           {getInitials(selectedConversation.contact_name || selectedConversation.user_identifier)}
                         </div>
@@ -2151,21 +2361,32 @@ function App() {
                           </p>
                         </div>
                       </div>
-                      <div className="flex items-center bg-surface-container-high rounded-full p-1 border border-outline-variant">
+                      <div className="flex items-center gap-2">
                         <button 
-                          className={`flex items-center gap-2 px-4 py-1.5 rounded-full font-bold text-body-sm transition-all ${aiMode ? 'bg-primary text-on-primary-container shadow-sm' : 'text-on-surface-variant hover:text-on-surface'}`}
-                          onClick={() => handleToggleAiMode(true)}
+                          onClick={() => setMobileActivePanel('info')}
+                          className="md:hidden p-2 text-on-surface hover:bg-surface-container rounded-lg border-none bg-transparent cursor-pointer flex items-center"
+                          title="Info client"
                         >
-                          <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: aiMode ? "'FILL' 1" : "'FILL' 0" }}>smart_toy</span>
-                          Mode IA
+                          <span className="material-symbols-outlined text-[24px]">info</span>
                         </button>
-                        <button 
-                          className={`flex items-center gap-2 px-4 py-1.5 rounded-full font-bold text-body-sm transition-all ${!aiMode ? 'bg-primary text-on-primary-container shadow-sm' : 'text-on-surface-variant hover:text-on-surface'}`}
-                          onClick={() => handleToggleAiMode(false)}
-                        >
-                          <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: !aiMode ? "'FILL' 1" : "'FILL' 0" }}>person</span>
-                          Conseiller
-                        </button>
+                        <div className="flex items-center bg-surface-container-high rounded-full p-1 border border-outline-variant">
+                          <button 
+                            className={`flex items-center gap-2 px-4 py-1.5 rounded-full font-bold text-body-sm transition-all ${aiMode ? 'bg-primary text-on-primary-container shadow-sm' : 'text-on-surface-variant hover:text-on-surface'}`}
+                            onClick={() => handleToggleAiMode(true)}
+                          >
+                            <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: aiMode ? "'FILL' 1" : "'FILL' 0" }}>smart_toy</span>
+                            <span className="hidden sm:inline">Mode IA</span>
+                            <span className="sm:hidden">IA</span>
+                          </button>
+                          <button 
+                            className={`flex items-center gap-2 px-4 py-1.5 rounded-full font-bold text-body-sm transition-all ${!aiMode ? 'bg-primary text-on-primary-container shadow-sm' : 'text-on-surface-variant hover:text-on-surface'}`}
+                            onClick={() => handleToggleAiMode(false)}
+                          >
+                            <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: !aiMode ? "'FILL' 1" : "'FILL' 0" }}>person</span>
+                            <span className="hidden sm:inline">Conseiller</span>
+                            <span className="sm:hidden">Humain</span>
+                          </button>
+                        </div>
                       </div>
                     </div>
 
@@ -2250,7 +2471,16 @@ function App() {
                 const safeCreatedAt = safeFormat(selectedConversation.created_at, 'dd/MM/yyyy') || 'Non renseigné';
                 const safeId = selectedConversation.id ? selectedConversation.id.slice(0, 8) : '';
                 return (
-                  <section className="w-80 border-l border-outline-variant bg-surface flex flex-col p-lg custom-scrollbar overflow-y-auto">
+                  <section className={`w-full md:w-80 border-l border-outline-variant bg-surface flex flex-col p-lg custom-scrollbar overflow-y-auto ${!selectedConversation || mobileActivePanel !== 'info' ? 'hidden md:flex' : 'flex'}`}>
+                    <div className="md:hidden flex items-center mb-md">
+                      <button 
+                        onClick={() => setMobileActivePanel('chat')}
+                        className="flex items-center gap-1 text-primary bg-transparent border-none cursor-pointer font-bold"
+                      >
+                        <span className="material-symbols-outlined text-[20px]">arrow_back</span>
+                        <span>Retour au chat</span>
+                      </button>
+                    </div>
                     <div className="flex flex-col items-center mb-lg">
                       <div className="relative mb-4">
                         <div className="w-24 h-24 rounded-full border-4 border-surface-container-high bg-surface-container-highest flex items-center justify-center text-[36px] text-on-surface font-bold">
@@ -2380,111 +2610,214 @@ function App() {
                 </div>
 
                 {/* Flat Table */}
-                <div className="glass-panel p-md">
-                  {data.claims.length === 0 ? (
-                    <div className="text-center py-xl text-on-surface-variant opacity-75">
-                      <span className="material-symbols-outlined text-4xl mb-2">shield</span>
-                      <p className="m-0 font-bold">Aucun sinistre enregistré</p>
-                    </div>
-                  ) : (
-                    <div className="overflow-x-auto rounded-xl border border-outline-variant bg-surface-container-low/50">
-                      <table className="w-full text-left text-body-md text-on-surface">
-                        <thead className="bg-surface-container border-b border-outline-variant text-on-surface-variant font-bold">
-                          <tr>
-                            <th className="px-6 py-4 font-medium">Référence</th>
-                            <th className="px-6 py-4 font-medium">Client</th>
-                            <th className="px-6 py-4 font-medium">Occurrence</th>
-                            <th className="px-6 py-4 font-medium">Description</th>
-                            <th className="px-6 py-4 font-medium">Détails (JSONB)</th>
-                            <th className="px-6 py-4 font-medium">Date</th>
-                            <th className="px-6 py-4 font-medium w-[160px]">Statut</th>
-                            <th className="px-6 py-4 font-medium text-right">Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-outline-variant">
-                          {data.claims.map(claim => {
-                            const phone = claim.conversations?.user_identifier || claim.user_phone || '';
-                            const name = claim.conversations?.contact_name || claim.conversations?.client_profile?.name || '';
-                            
-                            // Occurrence chronologique per client
-                            const clientClaimsChronological = data.claims
-                              .filter(item => (item.conversations?.user_identifier || item.user_phone) === phone)
-                              .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+                    <div className="glass-panel p-md">
+                      {data.claims.length === 0 ? (
+                        <div className="text-center py-xl text-on-surface-variant opacity-75">
+                          <span className="material-symbols-outlined text-4xl mb-2">shield</span>
+                          <p className="m-0 font-bold">Aucun sinistre enregistré</p>
+                        </div>
+                      ) : (
+                        <>
+                          {/* Table layout on Desktop */}
+                          <div className="hidden md:block overflow-x-auto rounded-xl border border-outline-variant bg-surface-container-low/50">
+                            <table className="w-full text-left text-body-md text-on-surface">
+                              <thead className="bg-surface-container border-b border-outline-variant text-on-surface-variant font-bold">
+                                <tr>
+                                  <th className="px-6 py-4 font-medium">Référence</th>
+                                  <th className="px-6 py-4 font-medium">Client</th>
+                                  <th className="px-6 py-4 font-medium">Occurrence</th>
+                                  <th className="px-6 py-4 font-medium">Description</th>
+                                  <th className="px-6 py-4 font-medium">Détails (JSONB)</th>
+                                  <th className="px-6 py-4 font-medium">Date</th>
+                                  <th className="px-6 py-4 font-medium w-[160px]">Statut</th>
+                                  <th className="px-6 py-4 font-medium text-right">Actions</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-outline-variant">
+                                {data.claims.map(claim => {
+                                  const phone = claim.conversations?.user_identifier || claim.user_phone || '';
+                                  const name = claim.conversations?.contact_name || claim.conversations?.client_profile?.name || '';
+                                  
+                                  // Occurrence chronologique per client
+                                  const clientClaimsChronological = data.claims
+                                    .filter(item => (item.conversations?.user_identifier || item.user_phone) === phone)
+                                    .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
 
-                            const idx = clientClaimsChronological.findIndex(item => item.id === claim.id);
-                            const occurrence = `Sinistre N°${idx + 1}`;
+                                  const idx = clientClaimsChronological.findIndex(item => item.id === claim.id);
+                                  const occurrence = `Sinistre N°${idx + 1}`;
 
-                            return (
-                              <tr key={claim.id} className="hover:bg-surface-container-high transition-colors">
-                                <td className="px-6 py-4 font-bold text-xs tracking-wider">#{claim.id.slice(0, 8)}</td>
-                                <td className="px-6 py-4">
-                                  <div className="flex items-center gap-3">
-                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${getInitialsColor(name || phone)} text-on-primary-container`}>
+                                  return (
+                                    <tr key={claim.id} className="hover:bg-surface-container-high transition-colors">
+                                      <td className="px-6 py-4 font-bold text-xs tracking-wider">#{claim.id.slice(0, 8)}</td>
+                                      <td className="px-6 py-4">
+                                        <div className="flex items-center gap-3">
+                                          <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${getInitialsColor(name || phone)} text-on-primary-container`}>
+                                            {getInitials(name || phone)}
+                                          </div>
+                                          <div className="flex flex-col">
+                                            <span className="font-bold text-sm text-on-surface">{name || `+${phone}`}</span>
+                                            {name && <span className="text-[10px] text-on-surface-variant">+{phone}</span>}
+                                          </div>
+                                        </div>
+                                      </td>
+                                      <td className="px-6 py-4 font-bold text-xs text-primary">{occurrence}</td>
+                                      <td className="px-6 py-4 text-xs max-w-[200px] truncate" title={claim.description}>
+                                        {claim.description || "Détails non fournis"}
+                                      </td>
+                                      <td className="px-6 py-4 flex gap-1 items-center overflow-x-auto max-w-[250px] custom-scrollbar">
+                                        {renderDetailsTags(claim.details)}
+                                      </td>
+                                      <td className="px-6 py-4 text-on-surface-variant text-xs">
+                                        {safeFormat(claim.created_at, 'd MMM yyyy HH:mm', { locale: fr })}
+                                      </td>
+                                      <td className="px-6 py-4">
+                                        <select
+                                          value={claim.status}
+                                          onChange={(e) => updateClaimStatus(claim.id, e.target.value)}
+                                          className="p-1.5 w-full bg-surface-container border border-outline-variant rounded-lg text-on-surface text-xs font-bold focus:border-primary focus:outline-none transition-colors cursor-pointer"
+                                        >
+                                          <option value="pending">Nouveau</option>
+                                          <option value="processing">En cours</option>
+                                          <option value="resolved">Clôturé</option>
+                                        </select>
+                                      </td>
+                                      <td className="px-6 py-4">
+                                        <div className="flex items-center justify-end gap-2">
+                                          <button 
+                                            onClick={() => {
+                                              const conv = data.conversations.find(c => c.user_identifier === phone);
+                                              if (conv) {
+                                                handleSelectConversation(conv);
+                                              }
+                                              setActiveTab('conversations');
+                                            }}
+                                            className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-all cursor-pointer"
+                                            title="Voir la conversation"
+                                          >
+                                            <span className="material-symbols-outlined text-[18px]">chat</span>
+                                          </button>
+                                          <button 
+                                            onClick={() => {
+                                              setSelectedAttestationData(claim);
+                                              setAttestationType('claim');
+                                              setIsAttestationOpen(true);
+                                              setCopiedAttestation(false);
+                                            }}
+                                            className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-all cursor-pointer"
+                                            title="Imprimer attestation"
+                                          >
+                                            <span className="material-symbols-outlined text-[18px]">print</span>
+                                          </button>
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+
+                          {/* Bento cards layout on Mobile */}
+                          <div className="md:hidden flex flex-col gap-4">
+                            {data.claims.map(claim => {
+                              const phone = claim.conversations?.user_identifier || claim.user_phone || '';
+                              const name = claim.conversations?.contact_name || claim.conversations?.client_profile?.name || '';
+                              
+                              // Occurrence chronologique per client
+                              const clientClaimsChronological = data.claims
+                                .filter(item => (item.conversations?.user_identifier || item.user_phone) === phone)
+                                .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+
+                              const idx = clientClaimsChronological.findIndex(item => item.id === claim.id);
+                              const occurrence = `Sinistre N°${idx + 1}`;
+
+                              return (
+                                <div key={claim.id} className="glass-panel p-md rounded-xl flex flex-col gap-md border border-outline-variant bg-surface-container-low/50 relative overflow-hidden">
+                                  {/* Card Header */}
+                                  <div className="flex justify-between items-start">
+                                    <span className="font-bold text-xs tracking-wider text-on-surface-variant/80">#{claim.id.slice(0, 8)}</span>
+                                    <span className="font-bold text-xs text-primary bg-primary/10 px-2.5 py-0.5 rounded-full">{occurrence}</span>
+                                  </div>
+
+                                  {/* Client Profile */}
+                                  <div className="flex items-center gap-3 border-b border-outline-variant/30 pb-sm">
+                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm ${getInitialsColor(name || phone)} text-on-primary-container`}>
                                       {getInitials(name || phone)}
                                     </div>
-                                    <div className="flex flex-col">
-                                      <span className="font-bold text-sm text-on-surface">{name || `+${phone}`}</span>
-                                      {name && <span className="text-[10px] text-on-surface-variant">+{phone}</span>}
+                                    <div className="flex flex-col text-left">
+                                      <span className="font-bold text-body-md text-on-surface">{name || `+${phone}`}</span>
+                                      {name && <span className="text-[11px] text-on-surface-variant">+{phone}</span>}
                                     </div>
                                   </div>
-                                </td>
-                                <td className="px-6 py-4 font-bold text-xs text-primary">{occurrence}</td>
-                                <td className="px-6 py-4 text-xs max-w-[200px] truncate" title={claim.description}>
-                                  {claim.description || "Détails non fournis"}
-                                </td>
-                                <td className="px-6 py-4 flex gap-1 items-center overflow-x-auto max-w-[250px] custom-scrollbar">
-                                  {renderDetailsTags(claim.details)}
-                                </td>
-                                <td className="px-6 py-4 text-on-surface-variant text-xs">
-                                  {safeFormat(claim.created_at, 'd MMM yyyy HH:mm', { locale: fr })}
-                                </td>
-                                <td className="px-6 py-4">
-                                  <select
-                                    value={claim.status}
-                                    onChange={(e) => updateClaimStatus(claim.id, e.target.value)}
-                                    className="p-1.5 w-full bg-surface-container border border-outline-variant rounded-lg text-on-surface text-xs font-bold focus:border-primary focus:outline-none transition-colors cursor-pointer"
-                                  >
-                                    <option value="pending">Nouveau</option>
-                                    <option value="processing">En cours</option>
-                                    <option value="resolved">Clôturé</option>
-                                  </select>
-                                </td>
-                                <td className="px-6 py-4">
-                                  <div className="flex items-center justify-end gap-2">
-                                    <button 
-                                      onClick={() => {
-                                        const conv = data.conversations.find(c => c.user_identifier === phone);
-                                        if (conv) {
-                                          handleSelectConversation(conv);
-                                        }
-                                        setActiveTab('conversations');
-                                      }}
-                                      className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-all cursor-pointer"
-                                      title="Voir la conversation"
-                                    >
-                                      <span className="material-symbols-outlined text-[18px]">chat</span>
-                                    </button>
-                                    <button 
-                                      onClick={() => {
-                                        setSelectedAttestationData(claim);
-                                        setAttestationType('claim');
-                                        setIsAttestationOpen(true);
-                                        setCopiedAttestation(false);
-                                      }}
-                                      className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-all cursor-pointer"
-                                      title="Imprimer attestation"
-                                    >
-                                      <span className="material-symbols-outlined text-[18px]">print</span>
-                                    </button>
+
+                                  {/* Details & Description */}
+                                  <div className="space-y-sm text-left">
+                                    <div>
+                                      <h4 className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant m-0 mb-1">Description</h4>
+                                      <p className="text-body-sm text-on-surface m-0 leading-relaxed">{claim.description || "Détails non fournis"}</p>
+                                    </div>
+                                    {claim.details && Object.keys(claim.details).length > 0 && (
+                                      <div>
+                                        <h4 className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant m-0 mb-1">Détails</h4>
+                                        <div className="flex gap-1 items-center flex-wrap">
+                                          {renderDetailsTags(claim.details)}
+                                        </div>
+                                      </div>
+                                    )}
+                                    <div>
+                                      <h4 className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant m-0 mb-1">Date déclaration</h4>
+                                      <p className="text-body-sm text-on-surface-variant m-0">{safeFormat(claim.created_at, 'd MMM yyyy HH:mm', { locale: fr })}</p>
+                                    </div>
                                   </div>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
+
+                                  {/* Actions & Status */}
+                                  <div className="flex justify-between items-center border-t border-outline-variant/30 pt-md mt-sm gap-md">
+                                    <div className="flex-1 text-left">
+                                      <h4 className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant m-0 mb-1">Statut</h4>
+                                      <select
+                                        value={claim.status}
+                                        onChange={(e) => updateClaimStatus(claim.id, e.target.value)}
+                                        className="p-1.5 w-full bg-surface-container border border-outline-variant rounded-lg text-on-surface text-xs font-bold focus:border-primary focus:outline-none transition-colors cursor-pointer"
+                                      >
+                                        <option value="pending">Nouveau</option>
+                                        <option value="processing">En cours</option>
+                                        <option value="resolved">Clôturé</option>
+                                      </select>
+                                    </div>
+                                    <div className="flex gap-sm items-end self-end">
+                                      <button 
+                                        onClick={() => {
+                                          const conv = data.conversations.find(c => c.user_identifier === phone);
+                                          if (conv) {
+                                            handleSelectConversation(conv);
+                                          }
+                                          setActiveTab('conversations');
+                                        }}
+                                        className="flex items-center justify-center w-9 h-9 rounded-xl bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-all cursor-pointer"
+                                        title="Voir la conversation"
+                                      >
+                                        <span className="material-symbols-outlined text-[18px]">chat</span>
+                                      </button>
+                                      <button 
+                                        onClick={() => {
+                                          setSelectedAttestationData(claim);
+                                          setAttestationType('claim');
+                                          setIsAttestationOpen(true);
+                                          setCopiedAttestation(false);
+                                        }}
+                                        className="flex items-center justify-center w-9 h-9 rounded-xl bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-all cursor-pointer"
+                                        title="Imprimer attestation"
+                                      >
+                                        <span className="material-symbols-outlined text-[18px]">print</span>
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </>
+                      )}
                 </div>
               </div>
             );
@@ -2536,64 +2869,177 @@ function App() {
                       <p className="m-0 font-bold">Aucun devis enregistré</p>
                     </div>
                   ) : (
-                    <div className="overflow-x-auto rounded-xl border border-outline-variant bg-surface-container-low/50">
-                      <table className="w-full text-left text-body-md text-on-surface">
-                        <thead className="bg-surface-container border-b border-outline-variant text-on-surface-variant font-bold">
-                          <tr>
-                            <th className="px-6 py-4 font-medium">Référence</th>
-                            <th className="px-6 py-4 font-medium">Client</th>
-                            <th className="px-6 py-4 font-medium">Type</th>
-                            <th className="px-6 py-4 font-medium">Occurrence</th>
-                            <th className="px-6 py-4 font-medium">Détails (JSONB)</th>
-                            <th className="px-6 py-4 font-medium">Date</th>
-                            <th className="px-6 py-4 font-medium w-[160px]">Statut</th>
-                            <th className="px-6 py-4 font-medium text-right">Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-outline-variant">
-                          {data.quotes.map(quote => {
-                            const phone = quote.conversations?.user_identifier || quote.user_phone || '';
-                            const name = quote.conversations?.contact_name || quote.conversations?.client_profile?.name || '';
-                            const insuranceType = quote.insurance_type || 'auto';
-                            
-                            // Occurrence chronologique per client
-                            const clientQuotesChronological = data.quotes
-                              .filter(item => (item.conversations?.user_identifier || item.user_phone) === phone)
-                              .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+                    <>
+                      {/* Table layout on Desktop */}
+                      <div className="hidden md:block overflow-x-auto rounded-xl border border-outline-variant bg-surface-container-low/50">
+                        <table className="w-full text-left text-body-md text-on-surface">
+                          <thead className="bg-surface-container border-b border-outline-variant text-on-surface-variant font-bold">
+                            <tr>
+                              <th className="px-6 py-4 font-medium">Référence</th>
+                              <th className="px-6 py-4 font-medium">Client</th>
+                              <th className="px-6 py-4 font-medium">Type</th>
+                              <th className="px-6 py-4 font-medium">Occurrence</th>
+                              <th className="px-6 py-4 font-medium">Détails (JSONB)</th>
+                              <th className="px-6 py-4 font-medium">Date</th>
+                              <th className="px-6 py-4 font-medium w-[160px]">Statut</th>
+                              <th className="px-6 py-4 font-medium text-right">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-outline-variant">
+                            {data.quotes.map(quote => {
+                              const phone = quote.conversations?.user_identifier || quote.user_phone || '';
+                              const name = quote.conversations?.contact_name || quote.conversations?.client_profile?.name || '';
+                              const insuranceType = quote.insurance_type || 'auto';
+                              
+                              // Occurrence chronologique per client
+                              const clientQuotesChronological = data.quotes
+                                .filter(item => (item.conversations?.user_identifier || item.user_phone) === phone)
+                                .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
 
-                            const idx = clientQuotesChronological.findIndex(item => item.id === quote.id);
-                            
-                            let displayType = "Auto";
-                            if (insuranceType === 'health') displayType = "Santé";
-                            else if (insuranceType === 'property') displayType = "Habitation";
-                            
-                            const occurrence = `${displayType} N°${idx + 1}`;
+                              const idx = clientQuotesChronological.findIndex(item => item.id === quote.id);
+                              
+                              let displayType = "Auto";
+                              if (insuranceType === 'health') displayType = "Santé";
+                              else if (insuranceType === 'property') displayType = "Habitation";
+                              
+                              const occurrence = `${displayType} N°${idx + 1}`;
 
-                            return (
-                              <tr key={quote.id} className="hover:bg-surface-container-high transition-colors">
-                                <td className="px-6 py-4 font-bold text-xs tracking-wider">#{quote.id.slice(0, 8)}</td>
-                                <td className="px-6 py-4">
-                                  <div className="flex items-center gap-3">
-                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${getInitialsColor(name || phone)} text-on-primary-container`}>
-                                      {getInitials(name || phone)}
+                              return (
+                                <tr key={quote.id} className="hover:bg-surface-container-high transition-colors">
+                                  <td className="px-6 py-4 font-bold text-xs tracking-wider">#{quote.id.slice(0, 8)}</td>
+                                  <td className="px-6 py-4">
+                                    <div className="flex items-center gap-3">
+                                      <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${getInitialsColor(name || phone)} text-on-primary-container`}>
+                                        {getInitials(name || phone)}
+                                      </div>
+                                      <div className="flex flex-col">
+                                        <span className="font-bold text-sm text-on-surface">{name || `+${phone}`}</span>
+                                        {name && <span className="text-[10px] text-on-surface-variant">+{phone}</span>}
+                                      </div>
                                     </div>
-                                    <div className="flex flex-col">
-                                      <span className="font-bold text-sm text-on-surface">{name || `+${phone}`}</span>
-                                      {name && <span className="text-[10px] text-on-surface-variant">+{phone}</span>}
+                                  </td>
+                                  <td className="px-6 py-4 text-xs font-bold uppercase text-on-surface-variant">
+                                    {insuranceType}
+                                  </td>
+                                  <td className="px-6 py-4 font-bold text-xs text-primary">{occurrence}</td>
+                                  <td className="px-6 py-4 flex gap-1 items-center overflow-x-auto max-w-[250px] custom-scrollbar">
+                                    {renderDetailsTags(quote.details)}
+                                  </td>
+                                  <td className="px-6 py-4 text-on-surface-variant text-xs">
+                                    {safeFormat(quote.created_at, 'd MMM yyyy HH:mm', { locale: fr })}
+                                  </td>
+                                  <td className="px-6 py-4">
+                                    <select
+                                      value={quote.status}
+                                      onChange={(e) => updateQuoteStatus(quote.id, e.target.value)}
+                                      className="p-1.5 w-full bg-surface-container border border-outline-variant rounded-lg text-on-surface text-xs font-bold focus:border-primary focus:outline-none transition-colors cursor-pointer"
+                                    >
+                                      <option value="pending">En attente</option>
+                                      <option value="in_progress">En cours</option>
+                                      <option value="sent">Envoyé</option>
+                                      <option value="converted">Accepté</option>
+                                      <option value="rejected">Refusé</option>
+                                    </select>
+                                  </td>
+                                  <td className="px-6 py-4">
+                                    <div className="flex items-center justify-end gap-2">
+                                      <button 
+                                        onClick={() => {
+                                          const conv = data.conversations.find(c => c.user_identifier === phone);
+                                          if (conv) {
+                                            handleSelectConversation(conv);
+                                          }
+                                          setActiveTab('conversations');
+                                        }}
+                                        className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-all cursor-pointer"
+                                        title="Voir la conversation"
+                                      >
+                                        <span className="material-symbols-outlined text-[18px]">chat</span>
+                                      </button>
+                                      <button 
+                                        onClick={() => {
+                                          setSelectedAttestationData(quote);
+                                          setAttestationType('quote');
+                                          setIsAttestationOpen(true);
+                                          setCopiedAttestation(false);
+                                        }}
+                                        className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-all cursor-pointer"
+                                        title="Imprimer attestation"
+                                      >
+                                        <span className="material-symbols-outlined text-[18px]">print</span>
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      {/* Bento cards layout on Mobile */}
+                      <div className="md:hidden flex flex-col gap-4">
+                        {data.quotes.map(quote => {
+                          const phone = quote.conversations?.user_identifier || quote.user_phone || '';
+                          const name = quote.conversations?.contact_name || quote.conversations?.client_profile?.name || '';
+                          const insuranceType = quote.insurance_type || 'auto';
+                          
+                          // Occurrence chronologique per client
+                          const clientQuotesChronological = data.quotes
+                            .filter(item => (item.conversations?.user_identifier || item.user_phone) === phone)
+                            .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+
+                          const idx = clientQuotesChronological.findIndex(item => item.id === quote.id);
+                          
+                          let displayType = "Auto";
+                          if (insuranceType === 'health') displayType = "Santé";
+                          else if (insuranceType === 'property') displayType = "Habitation";
+                          
+                          const occurrence = `${displayType} N°${idx + 1}`;
+
+                          return (
+                            <div key={quote.id} className="glass-panel p-md rounded-xl flex flex-col gap-md border border-outline-variant bg-surface-container-low/50 relative overflow-hidden">
+                              {/* Card Header */}
+                              <div className="flex justify-between items-start">
+                                <span className="font-bold text-xs tracking-wider text-on-surface-variant/80">#{quote.id.slice(0, 8)}</span>
+                                <span className="font-bold text-xs text-primary bg-primary/10 px-2.5 py-0.5 rounded-full">{occurrence}</span>
+                              </div>
+
+                              {/* Client Profile */}
+                              <div className="flex items-center gap-3 border-b border-outline-variant/30 pb-sm">
+                                <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm ${getInitialsColor(name || phone)} text-on-primary-container`}>
+                                  {getInitials(name || phone)}
+                                </div>
+                                <div className="flex flex-col text-left">
+                                  <span className="font-bold text-body-md text-on-surface">{name || `+${phone}`}</span>
+                                  {name && <span className="text-[11px] text-on-surface-variant">+{phone}</span>}
+                                </div>
+                              </div>
+
+                              {/* Details */}
+                              <div className="space-y-sm text-left">
+                                <div>
+                                  <h4 className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant m-0 mb-1">Type d'Assurance</h4>
+                                  <span className="text-xs font-bold uppercase tracking-wide px-2 py-0.5 rounded bg-surface-container-high border border-outline-variant/50 text-on-surface">{insuranceType}</span>
+                                </div>
+                                {quote.details && Object.keys(quote.details).length > 0 && (
+                                  <div>
+                                    <h4 className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant m-0 mb-1">Détails de la Demande</h4>
+                                    <div className="flex gap-1 items-center flex-wrap">
+                                      {renderDetailsTags(quote.details)}
                                     </div>
                                   </div>
-                                </td>
-                                <td className="px-6 py-4 text-xs font-bold uppercase text-on-surface-variant">
-                                  {insuranceType}
-                                </td>
-                                <td className="px-6 py-4 font-bold text-xs text-primary">{occurrence}</td>
-                                <td className="px-6 py-4 flex gap-1 items-center overflow-x-auto max-w-[250px] custom-scrollbar">
-                                  {renderDetailsTags(quote.details)}
-                                </td>
-                                <td className="px-6 py-4 text-on-surface-variant text-xs">
-                                  {safeFormat(quote.created_at, 'd MMM yyyy HH:mm', { locale: fr })}
-                                </td>
-                                <td className="px-6 py-4">
+                                )}
+                                <div>
+                                  <h4 className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant m-0 mb-1">Date demande</h4>
+                                  <p className="text-body-sm text-on-surface-variant m-0">{safeFormat(quote.created_at, 'd MMM yyyy HH:mm', { locale: fr })}</p>
+                                </div>
+                              </div>
+
+                              {/* Actions & Status */}
+                              <div className="flex justify-between items-center border-t border-outline-variant/30 pt-md mt-sm gap-md">
+                                <div className="flex-1 text-left">
+                                  <h4 className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant m-0 mb-1">Statut</h4>
                                   <select
                                     value={quote.status}
                                     onChange={(e) => updateQuoteStatus(quote.id, e.target.value)}
@@ -2605,42 +3051,40 @@ function App() {
                                     <option value="converted">Accepté</option>
                                     <option value="rejected">Refusé</option>
                                   </select>
-                                </td>
-                                <td className="px-6 py-4">
-                                  <div className="flex items-center justify-end gap-2">
-                                    <button 
-                                      onClick={() => {
-                                        const conv = data.conversations.find(c => c.user_identifier === phone);
-                                        if (conv) {
-                                          handleSelectConversation(conv);
-                                        }
-                                        setActiveTab('conversations');
-                                      }}
-                                      className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-all cursor-pointer"
-                                      title="Voir la conversation"
-                                    >
-                                      <span className="material-symbols-outlined text-[18px]">chat</span>
-                                    </button>
-                                    <button 
-                                      onClick={() => {
-                                        setSelectedAttestationData(quote);
-                                        setAttestationType('quote');
-                                        setIsAttestationOpen(true);
-                                        setCopiedAttestation(false);
-                                      }}
-                                      className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-all cursor-pointer"
-                                      title="Imprimer attestation"
-                                    >
-                                      <span className="material-symbols-outlined text-[18px]">print</span>
-                                    </button>
-                                  </div>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
+                                </div>
+                                <div className="flex gap-sm items-end self-end">
+                                  <button 
+                                    onClick={() => {
+                                      const conv = data.conversations.find(c => c.user_identifier === phone);
+                                      if (conv) {
+                                        handleSelectConversation(conv);
+                                      }
+                                      setActiveTab('conversations');
+                                    }}
+                                    className="flex items-center justify-center w-9 h-9 rounded-xl bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-all cursor-pointer"
+                                    title="Voir la conversation"
+                                  >
+                                    <span className="material-symbols-outlined text-[18px]">chat</span>
+                                  </button>
+                                  <button 
+                                    onClick={() => {
+                                      setSelectedAttestationData(quote);
+                                      setAttestationType('quote');
+                                      setIsAttestationOpen(true);
+                                      setCopiedAttestation(false);
+                                    }}
+                                    className="flex items-center justify-center w-9 h-9 rounded-xl bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-all cursor-pointer"
+                                    title="Imprimer attestation"
+                                  >
+                                    <span className="material-symbols-outlined text-[18px]">print</span>
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </>
                   )}
                 </div>
               </div>
@@ -2945,11 +3389,11 @@ function App() {
       {/* New Policy Modal */}
       {showNewPolicyModal && (
         <div 
-          className="fixed inset-0 w-[100vw] h-[100vh] bg-black/70 backdrop-blur-md z-[999] flex flex-col items-center justify-center p-6"
+          className="fixed inset-0 w-[100vw] h-[100vh] bg-black/70 backdrop-blur-md z-[999] flex flex-col items-center justify-center p-0 md:p-6"
           onClick={() => setShowNewPolicyModal(false)}
         >
           <div 
-            className="glass-panel max-w-[500px] w-full p-xl rounded-2xl flex flex-col gap-lg animate-fade-in relative border border-outline-variant/60 shadow-2xl"
+            className="glass-panel w-full h-full md:h-auto md:max-w-[500px] p-lg md:p-xl md:rounded-2xl flex flex-col gap-lg animate-fade-in relative border-0 md:border border-outline-variant/60 shadow-2xl overflow-y-auto text-left"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex justify-between items-center pb-md border-b border-outline-variant">
@@ -3016,7 +3460,7 @@ function App() {
                 ></textarea>
               </div>
 
-              <div className="flex justify-end gap-md pt-md border-t border-outline-variant">
+              <div className="flex justify-end gap-md pt-md border-t border-outline-variant mt-auto md:mt-0">
                 <button
                   type="button"
                   onClick={() => setShowNewPolicyModal(false)}
@@ -3039,11 +3483,11 @@ function App() {
       {/* Analyst AI Modal */}
       {isAnalystOpen && (
         <div 
-          className="fixed inset-0 w-[100vw] h-[100vh] bg-black/70 backdrop-blur-md z-[999] flex flex-col items-center justify-center p-6 no-print"
+          className="fixed inset-0 w-[100vw] h-[100vh] bg-black/70 backdrop-blur-md z-[999] flex flex-col items-center justify-center p-0 md:p-6 no-print"
           onClick={() => setIsAnalystOpen(false)}
         >
           <div 
-            className="glass-panel max-w-[600px] w-full p-xl rounded-2xl flex flex-col gap-lg animate-fade-in relative border border-outline-variant/60 shadow-2xl"
+            className="glass-panel w-full h-full md:h-auto md:max-w-[600px] p-lg md:p-xl md:rounded-2xl flex flex-col gap-lg animate-fade-in relative border-0 md:border border-outline-variant/60 shadow-2xl overflow-y-auto text-left"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex justify-between items-center pb-md border-b border-outline-variant">
@@ -3082,7 +3526,7 @@ function App() {
               </div>
             </div>
 
-            <div className="flex justify-end pt-md border-t border-outline-variant">
+            <div className="flex justify-end pt-md border-t border-outline-variant mt-auto md:mt-0">
               <button
                 type="button"
                 onClick={() => setIsAnalystOpen(false)}
@@ -3097,8 +3541,8 @@ function App() {
       
       {/* Global Printable Attestation Modal */}
       {isAttestationOpen && selectedAttestationData && (
-        <div className="fixed inset-0 w-[100vw] h-[100vh] bg-black/80 backdrop-blur-md flex items-center justify-center z-[9999] p-md overflow-y-auto no-print">
-          <div className="glass-panel max-w-2xl w-full p-lg flex flex-col gap-6 relative shadow-2xl bg-surface-container border border-outline-variant/60">
+        <div className="fixed inset-0 w-[100vw] h-[100vh] bg-black/80 backdrop-blur-md flex items-center justify-center z-[9999] p-0 md:p-md overflow-y-auto no-print">
+          <div className="glass-panel w-full h-full md:h-auto md:max-w-2xl p-lg md:p-xl md:rounded-2xl flex flex-col gap-6 relative shadow-2xl bg-surface-container border-0 md:border border-outline-variant/60 overflow-y-auto text-left">
             <button 
               onClick={() => {
                 setIsAttestationOpen(false);

@@ -12,6 +12,9 @@ export default function Layout({
   notificationsCount, 
   toggleNotifications,
   onNewPolicy,
+  onLogout,
+  showInstallBtn,
+  handleInstallApp,
   t
 }) {
   return (
@@ -21,21 +24,25 @@ export default function Layout({
         setActiveTab={setActiveTab} 
         unreadCounts={unreadCounts} 
         onNewPolicy={onNewPolicy}
+        onLogout={onLogout}
         t={t}
       />
       <TopBar 
         theme={theme} 
         toggleTheme={toggleTheme} 
         notificationsCount={notificationsCount} 
-        toggleNotifications={toggleNotifications} 
+        toggleNotifications={toggleNotifications}
+        onLogout={onLogout}
+        showInstallBtn={showInstallBtn}
+        handleInstallApp={handleInstallApp}
       />
       
       {activeTab === 'conversations' ? (
-        <main className="ml-60 pt-16 h-screen overflow-hidden flex flex-col">
+        <main className="ml-0 md:ml-60 pt-16 pb-16 md:pb-0 h-[100dvh] overflow-hidden flex flex-col">
           {children}
         </main>
       ) : (
-        <main className="ml-60 pt-24 pb-xl px-xl min-h-screen">
+        <main className="ml-0 md:ml-60 pt-20 md:pt-24 pb-20 md:pb-xl px-4 md:px-xl min-h-screen">
           <div className="max-w-[1440px] mx-auto">
             {children}
           </div>
