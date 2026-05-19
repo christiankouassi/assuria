@@ -1072,6 +1072,11 @@ function App() {
   useEffect(() => {
     fetchData();
     
+    // Polling toutes les 5 secondes
+    const intervalId = setInterval(() => {
+      fetchData();
+    }, 5000);
+
     const channel = supabase.channel('dashboard_data')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'conversations' }, fetchData)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'claims' }, fetchData)
@@ -1084,6 +1089,7 @@ function App() {
       .subscribe();
 
     return () => {
+      clearInterval(intervalId);
       supabase.removeChannel(channel);
     };
   }, []);
@@ -2248,7 +2254,13 @@ function App() {
                     <div className="flex flex-col items-center mb-lg">
                       <div className="relative mb-4">
                         <div className="w-24 h-24 rounded-full border-4 border-surface-container-high bg-surface-container-highest flex items-center justify-center text-[36px] text-on-surface font-bold">
-                          {selectedConversation.user_identifier ? selectedConversation.user_identifier.substring(0, 2).toUpperCase() : ''}
+                          {(() => {
+                            const name = selectedConversation.contact_name || selectedConversation.client_profile?.name;
+                            if (name && name.trim()) {
+                              return getInitials(name);
+                            }
+                            return <User size={40} className="text-on-surface-variant/80" />;
+                          })()}
                         </div>
                         <div className="absolute bottom-1 right-1 w-6 h-6 bg-[#25D366] rounded-full border-2 border-surface flex items-center justify-center">
                           <img alt="WhatsApp" className="w-4 h-4" src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" />
