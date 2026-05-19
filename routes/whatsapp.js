@@ -56,7 +56,7 @@ router.post('/', (req, res) => {
     const entry = req.body?.entry?.[0];
     const change = entry?.changes?.[0];
     const val = change?.value;
-    const recipientPhoneId = val?.metadata?.phone_number_id;
+    const recipientPhoneId = val?.metadata?.phone_number_id ? val.metadata.phone_number_id.toString() : null;
 
     if (!recipientPhoneId) {
         console.error('[Webhook] Aucun Phone Number ID trouvé dans le message entrant.');
